@@ -48,6 +48,12 @@ typedef std::unordered_map<uint32, GameObjectQuestItemList> GameObjectQuestItemM
 
 union GameObjectValue
 {
+    //3 GAMEOBJECT_TYPE_CHEST
+    struct
+    {
+        uint32 usedCount;
+        uint32 maxOpens;
+    } Chest;
     //11 GAMEOBJECT_TYPE_TRANSPORT
     struct
     {
@@ -119,6 +125,14 @@ enum LootState
 class GameObject : public WorldObject, public GridObject<GameObject>, public MovableMapObject, public UpdatableMapObject
 {
 public:
+    void GenerateMiningCharges(Player* firstPlayer);
+    [[nodiscard]] bool HasMiningCharges() const { return m_miningChargesGenerated; }
+    std::vector<std::pair<uint32, uint32>> const& GetNextMiningCharge();
+
+    static bool IsMiningBaseItem(uint32 itemId);
+    static bool IsMiningBonusItem(uint32 itemId);  // NEW: identifies bonus items (gems) that go into the last charge only
+    static void LoadMiningBaseItems();
+
     explicit GameObject();
     ~GameObject() override;
 
@@ -367,6 +381,8 @@ public:
 
     bool IsUpdateNeeded() override;
 protected:
+    std::vector<std::vector<std::pair<uint32, uint32>>> m_lootCharges;
+    bool m_miningChargesGenerated = false;
     bool AIM_Initialize();
     GameObjectModel* CreateModel();
     void UpdateModel();                                 // updates model in case displayId were changed

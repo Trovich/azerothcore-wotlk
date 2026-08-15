@@ -7892,19 +7892,42 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
             {
                 loot->clear();
 
-                Group* group = GetGroup();
-                bool groupRules = (group && go->GetGOInfo()->type == GAMEOBJECT_TYPE_CHEST && go->GetGOInfo()->chest.groupLootRules);
+                // Кастом: мультизарядные ноды - используем заранее нарезанные заряды вместо повторного ролла
+                bool isChargeBasedChest = (go->GetGoType() == GAMEOBJECT_TYPE_CHEST
+                    && go->GetGOInfo()->chest.consumable == 0
+                    && go->GetGOInfo()->chest.chestRestockTime > 0);
 
-                // check current RR player and get next if necessary
-                if (groupRules)
-                    group->UpdateLooterGuid(go, true);
+                if (isChargeBasedChest)
+                {
+                    if (!go->HasMiningCharges())
+                        go->GenerateMiningCharges(this);
 
-                loot->FillLoot(lootid, LootTemplates_Gameobject, this, !groupRules, false, go->GetLootMode(), go);
-                go->SetLootGenerationTime();
+                    loot->lootOwnerGUID = GetGUID();
 
-                // get next RR player (for next loot)
-                if (groupRules && !go->loot.empty())
-                    group->UpdateLooterGuid(go);
+                    for (auto const& [itemId, count] : go->GetNextMiningCharge())
+                    {
+                        LootStoreItem chargeItem(itemId, 0, 100.0f, false, LOOT_MODE_DEFAULT, 0, int32(count), uint8(count));
+                        loot->AddItem(chargeItem);
+                    }
+
+                    go->SetLootGenerationTime();
+                }
+                else
+                {
+                    Group* group = GetGroup();
+                    bool groupRules = (group && go->GetGOInfo()->type == GAMEOBJECT_TYPE_CHEST && go->GetGOInfo()->chest.groupLootRules);
+
+                    // check current RR player and get next if necessary
+                    if (groupRules)
+                        group->UpdateLooterGuid(go, true);
+
+                    loot->FillLoot(lootid, LootTemplates_Gameobject, this, !groupRules, false, go->GetLootMode(), go);
+                    go->SetLootGenerationTime();
+
+                    // get next RR player (for next loot)
+                    if (groupRules && !go->loot.empty())
+                        group->UpdateLooterGuid(go);
+                }
             }
             if (GameObjectTemplateAddon const* addon = go->GetTemplateAddon())
                 loot->generateMoneyLoot(addon->mingold, addon->maxgold);

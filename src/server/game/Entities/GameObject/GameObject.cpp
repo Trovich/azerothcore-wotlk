@@ -19,6 +19,7 @@
 #include "BattlegroundAV.h"
 #include "CellImpl.h"
 #include "CreatureAISelector.h"
+#include "Containers.h"
 #include "DisableMgr.h"
 #include "GameObjectAI.h"
 #include "GameObjectModel.h"
@@ -37,6 +38,50 @@
 #include <G3D/Box.h>
 #include <G3D/CoordinateFrame.h>
 #include <G3D/Quat.h>
+#include <numeric>
+#include <unordered_set>
+
+ // CUSTOM: mining node multi-charge system - base items (ore) must appear in every charge,
+ // bonus items (gems) are guaranteed to appear only in the final charge
+namespace
+{
+    std::unordered_set<uint32> MiningBaseItems;
+    std::unordered_set<uint32> MiningBonusItems;
+}
+
+void GameObject::LoadMiningBaseItems()
+{
+    MiningBaseItems.clear();
+    MiningBonusItems.clear();
+
+    if (QueryResult result = WorldDatabase.Query("SELECT item_entry FROM mining_base_items"))
+    {
+        do
+        {
+            MiningBaseItems.insert(result->Fetch()[0].Get<uint32>());
+        } while (result->NextRow());
+    }
+
+    if (QueryResult result = WorldDatabase.Query("SELECT item_entry FROM mining_bonus_items"))
+    {
+        do
+        {
+            MiningBonusItems.insert(result->Fetch()[0].Get<uint32>());
+        } while (result->NextRow());
+    }
+
+    LOG_INFO("server.loading", "Loaded {} mining base items, {} mining bonus items", MiningBaseItems.size(), MiningBonusItems.size());
+}
+
+bool GameObject::IsMiningBaseItem(uint32 itemId)
+{
+    return MiningBaseItems.find(itemId) != MiningBaseItems.end();
+}
+
+bool GameObject::IsMiningBonusItem(uint32 itemId)
+{
+    return MiningBonusItems.find(itemId) != MiningBonusItems.end();
+}
 
 bool QuaternionData::IsUnit() const
 {
@@ -368,6 +413,14 @@ bool GameObject::Create(ObjectGuid::LowType guidlow, uint32 name_id, Map* map, u
 
     switch (goinfo->type)
     {
+        case GAMEOBJECT_TYPE_CHEST:
+            SetGoAnimProgress(animprogress);
+            // Кастом: лимит успешных использований для мультизарядных нод.
+            m_goValue.Chest.usedCount = 0;
+            m_goValue.Chest.maxOpens = (GetGOInfo()->chest.maxSuccessOpens > 0)
+            ? urand(std::max<uint32>(1, GetGOInfo()->chest.minSuccessOpens), GetGOInfo()->chest.maxSuccessOpens)
+            : 0;
+            break;
         case GAMEOBJECT_TYPE_FISHINGHOLE:
             SetGoAnimProgress(animprogress);
             m_goValue.FishingHole.MaxOpens = urand(GetGOInfo()->fishinghole.minSuccessOpens, GetGOInfo()->fishinghole.maxSuccessOpens);
@@ -777,11 +830,15 @@ void GameObject::Update(uint32 diff)
                         }
 
                         // Non-consumable chest was partially looted and restock time passed, restock all loot now
-                        if (GetGOInfo()->chest.consumable == 0 && GameTime::GetGameTime() >= m_restockTime)
+                        if (GetGOInfo()->chest.consumable == 0 && GameTime::GetGameTime() >= m_restockTime && loot.isLooted())
                         {
-                            m_restockTime = 0s;
-                            m_lootState = GO_READY;
-                            AddToObjectUpdateIfNeeded();
+                            bool limitReached = (m_goValue.Chest.maxOpens > 0 && m_goValue.Chest.usedCount >= m_goValue.Chest.maxOpens);
+                            if (!limitReached)
+                            {
+                                m_restockTime = 0s;
+                                m_lootState = GO_READY;
+                                AddToObjectUpdateIfNeeded();
+                            }
                         }
                         break;
                     case GAMEOBJECT_TYPE_TRAP:
@@ -843,7 +900,18 @@ void GameObject::Update(uint32 diff)
 
                 // Do not delete chests or goobers that are not consumed on loot, while still allowing them to despawn when they expire if summoned
                 bool isSummonedAndExpired = (GetOwner() || GetSpellId()) && m_respawnTime == 0;
-                if ((GetGoType() == GAMEOBJECT_TYPE_CHEST || GetGoType() == GAMEOBJECT_TYPE_GOOBER) && !GetGOInfo()->IsDespawnAtAction() && !isSummonedAndExpired)
+
+                // Кастом: считаем использования и проверяем лимит перед тем, как решать - рестокать или нет
+                bool chestOpensLimitReached = false;
+                if (GetGoType() == GAMEOBJECT_TYPE_CHEST && GetGOInfo()->chest.chestRestockTime > 0 && m_goValue.Chest.maxOpens > 0)
+                {
+                    ++m_goValue.Chest.usedCount;
+                    if (m_goValue.Chest.usedCount >= m_goValue.Chest.maxOpens)
+                        chestOpensLimitReached = true;
+                }
+
+
+                if ((GetGoType() == GAMEOBJECT_TYPE_CHEST || GetGoType() == GAMEOBJECT_TYPE_GOOBER) && !GetGOInfo()->IsDespawnAtAction() && !isSummonedAndExpired && !chestOpensLimitReached)
                 {
                     if (GetGoType() == GAMEOBJECT_TYPE_CHEST && GetGOInfo()->chest.chestRestockTime > 0)
                     {
@@ -1013,6 +1081,105 @@ void GameObject::GetFishLoot(Loot* fishLoot, Player* lootOwner, bool junk /*= fa
         if (!fishLoot->empty() && !fishLoot->isLooted())
             break;
     }
+}
+
+// CUSTOM: generates fixed loot charges for a multi-use mining/herb node (TBC/Classic style).
+// Called once, on first use. The normal loot roll (FillLoot) is untouched - we just take its
+// output and split it into charges instead of handing out everything at once.
+void GameObject::GenerateMiningCharges(Player* firstPlayer)
+{
+    m_miningChargesGenerated = true;
+    m_lootCharges.clear();
+
+    uint32 lootid = GetGOInfo()->GetLootId();
+    if (!lootid || !firstPlayer)
+        return;
+
+    // Standard, untouched loot roll - same tables, same chances as always
+    Loot tempLoot;
+    tempLoot.FillLoot(lootid, LootTemplates_Gameobject, firstPlayer, true, true, GetLootMode(), this);
+
+    std::vector<std::pair<uint32, uint32>> totalItems;
+    for (LootItem const& li : tempLoot.items)
+        if (li.count > 0)
+            totalItems.emplace_back(li.itemid, li.count);
+
+    if (totalItems.empty())
+        return;
+
+    // Split rolled items into "base" (ore, must be in every charge) and "bonus" (gems, last charge only),
+    // using explicit DB-driven lists rather than count/quality heuristics (both are unreliable here)
+    std::vector<std::pair<uint32, uint32>> regularItems;
+    std::vector<std::pair<uint32, uint32>> bonusItems;
+
+    uint32 baseItemCount = 0;
+    bool foundBaseItem = false;
+
+    for (auto const& item : totalItems)
+    {
+        if (GameObject::IsMiningBonusItem(item.first))
+        {
+            bonusItems.push_back(item);
+            continue;
+        }
+
+        regularItems.push_back(item);
+
+        if (GameObject::IsMiningBaseItem(item.first))
+        {
+            baseItemCount = std::max(baseItemCount, item.second);
+            foundBaseItem = true;
+        }
+    }
+
+    // Fallback: no item matched mining_base_items - use the highest count among regular items instead
+    if (!foundBaseItem)
+    {
+        for (auto const& [itemId, count] : regularItems)
+            baseItemCount = std::max(baseItemCount, count);
+    }
+
+    // CUSTOM: number of charges = actual ore count rolled above, NOT minSuccessOpens/maxSuccessOpens.
+    // This keeps the node's use-count perfectly in sync with how much ore it actually holds.
+    uint32 chargesCount = std::max<uint32>(1, baseItemCount);
+    m_goValue.Chest.maxOpens = chargesCount;
+
+    m_lootCharges.assign(chargesCount, {});
+
+    // Round-robin distribution of base/regular items across charges
+    for (auto const& [itemId, count] : regularItems)
+    {
+        for (uint32 i = 0; i < count; ++i)
+        {
+            uint32 slot = i % chargesCount;
+
+            auto& charge = m_lootCharges[slot];
+            auto it = std::find_if(charge.begin(), charge.end(),
+                [itemId](std::pair<uint32, uint32> const& p) { return p.first == itemId; });
+
+            if (it != charge.end())
+                it->second += 1;
+            else
+                charge.emplace_back(itemId, 1);
+        }
+    }
+
+    // Bonus items (gems) always land in the very last charge, i.e. the node's final use
+    if (!bonusItems.empty())
+    {
+        auto& lastCharge = m_lootCharges[chargesCount - 1];
+        for (auto const& [itemId, count] : bonusItems)
+            lastCharge.emplace_back(itemId, count);
+    }
+
+    // NOTE: charges are intentionally NOT shuffled - GetNextMiningCharge() reads them in order
+    // by usedCount, so charge index (chargesCount - 1) must stay the actual last use.
+}
+
+std::vector<std::pair<uint32, uint32>> const& GameObject::GetNextMiningCharge()
+{
+    uint32 idx = std::min<uint32>(m_goValue.Chest.usedCount, m_lootCharges.size() - 1);
+    return m_lootCharges[idx];
 }
 
 void GameObject::SaveToDB(bool saveAddon /*= false*/)

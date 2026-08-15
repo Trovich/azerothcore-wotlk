@@ -48,6 +48,7 @@
 #include "GameEventMgr.h"
 #include "GameGraveyard.h"
 #include "GameTime.h"
+#include "GameObject.h"
 #include "GitRevision.h"
 #include "GridNotifiersImpl.h"
 #include "GroupMgr.h"
@@ -617,6 +618,9 @@ void World::SetInitialWorldSettings()
 
     LOG_INFO("server.loading", "Loading Quests Starters and Enders...");
     sObjectMgr->LoadQuestStartersAndEnders();                    // must be after quest load
+
+    LOG_INFO("server.loading", "Loading Mining Base Items...");
+    GameObject::LoadMiningBaseItems();
 
     LOG_INFO("server.loading", "Loading Quest Greetings...");
     sObjectMgr->LoadQuestGreetings();                               // must be loaded after creature_template, gameobject_template tables
