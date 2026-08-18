@@ -7894,8 +7894,7 @@ void Player::SendLoot(ObjectGuid guid, LootType loot_type)
 
                 // Кастом: мультизарядные ноды - используем заранее нарезанные заряды вместо повторного ролла
                 bool isChargeBasedChest = (go->GetGoType() == GAMEOBJECT_TYPE_CHEST
-                    && go->GetGOInfo()->chest.consumable == 0
-                    && go->GetGOInfo()->chest.chestRestockTime > 0);
+                    && GameObject::IsMiningChargeNode(go->GetEntry()));
 
                 if (isChargeBasedChest)
                 {

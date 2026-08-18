@@ -131,6 +131,7 @@ public:
 
     static bool IsMiningBaseItem(uint32 itemId);
     static bool IsMiningBonusItem(uint32 itemId);  // NEW: identifies bonus items (gems) that go into the last charge only
+    static bool IsMiningChargeNode(uint32 goEntry); // NEW: explicit whitelist of GO entries that use the charge system
     static void LoadMiningBaseItems();
 
     explicit GameObject();

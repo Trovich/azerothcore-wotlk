@@ -47,12 +47,14 @@ namespace
 {
     std::unordered_set<uint32> MiningBaseItems;
     std::unordered_set<uint32> MiningBonusItems;
+    std::unordered_set<uint32> MiningChargeNodes; // NEW: explicit whitelist of gameobject entries
 }
 
 void GameObject::LoadMiningBaseItems()
 {
     MiningBaseItems.clear();
     MiningBonusItems.clear();
+    MiningChargeNodes.clear();
 
     if (QueryResult result = WorldDatabase.Query("SELECT item_entry FROM mining_base_items"))
     {
@@ -70,7 +72,16 @@ void GameObject::LoadMiningBaseItems()
         } while (result->NextRow());
     }
 
-    LOG_INFO("server.loading", "Loaded {} mining base items, {} mining bonus items", MiningBaseItems.size(), MiningBonusItems.size());
+    if (QueryResult result = WorldDatabase.Query("SELECT entry FROM mining_charge_nodes"))
+    {
+        do
+        {
+            MiningChargeNodes.insert(result->Fetch()[0].Get<uint32>());
+        } while (result->NextRow());
+    }
+
+    LOG_INFO("server.loading", "Loaded {} mining base items, {} mining bonus items, {} mining charge nodes",
+        MiningBaseItems.size(), MiningBonusItems.size(), MiningChargeNodes.size());
 }
 
 bool GameObject::IsMiningBaseItem(uint32 itemId)
@@ -81,6 +92,11 @@ bool GameObject::IsMiningBaseItem(uint32 itemId)
 bool GameObject::IsMiningBonusItem(uint32 itemId)
 {
     return MiningBonusItems.find(itemId) != MiningBonusItems.end();
+}
+
+bool GameObject::IsMiningChargeNode(uint32 goEntry)
+{
+    return MiningChargeNodes.find(goEntry) != MiningChargeNodes.end();
 }
 
 bool QuaternionData::IsUnit() const
@@ -1178,7 +1194,11 @@ void GameObject::GenerateMiningCharges(Player* firstPlayer)
 
 std::vector<std::pair<uint32, uint32>> const& GameObject::GetNextMiningCharge()
 {
-    uint32 idx = std::min<uint32>(m_goValue.Chest.usedCount, m_lootCharges.size() - 1);
+    static std::vector<std::pair<uint32, uint32>> const empty;
+    if (m_lootCharges.empty())
+        return empty;
+
+    uint32 idx = std::min<uint32>(m_goValue.Chest.usedCount, uint32(m_lootCharges.size() - 1));
     return m_lootCharges[idx];
 }
 
