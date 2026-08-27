@@ -8,4 +8,4 @@
 -- by the type-filtered deletes that no longer match (`type` is not written
 -- by the insert either).
 DELETE `ps` FROM `petition_sign` `ps` LEFT JOIN `petition` `p` ON `p`.`petition_id` = `ps`.`petition_id` WHERE `p`.`petition_id` IS NULL;
-ALTER TABLE `petition_sign` DROP PRIMARY KEY, ADD PRIMARY KEY (`petition_id`, `playerguid`), DROP INDEX `idx_petition_id_player`;
+ALTER TABLE `petition_sign` DROP PRIMARY KEY, ADD PRIMARY KEY (`petition_id`, `playerguid`);
