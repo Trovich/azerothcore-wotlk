@@ -65,6 +65,12 @@ public:
     void DeleteFromDB(CharacterDatabaseTransaction trans);
     static void DeleteFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransaction trans);
 
+    // Persisted player skeletons live in their own table (`character_bones`), so several
+    // skeletons of the same player can coexist and outlive a server restart.
+    void SaveBonesToDB();
+    void DeleteBonesFromDB(CharacterDatabaseTransaction trans = nullptr);
+    static void DeleteAllBonesFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransaction trans);
+
     [[nodiscard]] ObjectGuid GetOwnerGUID() const { return GetGuidValue(CORPSE_FIELD_OWNER); }
 
     [[nodiscard]] time_t const& GetGhostTime() const { return m_time; }

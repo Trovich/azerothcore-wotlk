@@ -4378,6 +4378,7 @@ void Player::DeleteFromDB(ObjectGuid::LowType lowGuid, uint32 accountId, bool up
                 trans->Append(stmt);
 
                 Corpse::DeleteFromDB(playerGuid, trans);
+                Corpse::DeleteAllBonesFromDB(playerGuid, trans);
 
                 sScriptMgr->OnPlayerDeleteFromDB(trans, lowGuid);
 
@@ -14242,6 +14243,30 @@ void Player::HandleFall(MovementInfo const& movementInfo)
         // recheck alive, might have died of EnvironmentalDamage, avoid cases when player die in fact like Spirit of Redemption case
         if (IsAlive() && final_damage < original_health)
             UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_FALL_WITHOUT_DYING, uint32(z_diff * 100));
+    }
+}
+
+void Player::HandleVehicleFall(Unit* vehicleBase, MovementInfo const& movementInfo)
+{
+    float z_diff = m_lastFallZ - movementInfo.pos.GetPositionZ();
+
+    if (z_diff >= MIN_FALL_DMG_DIST && vehicleBase->IsAlive() &&
+        !HasHoverAura() && !HasFeatherFallAura() && !HasFlyAura())
+    {
+        int32 safe_fall = GetTotalAuraModifier(SPELL_AURA_SAFE_FALL);
+        float damageperc = FALL_DMG_EQU_SLOPE * (z_diff - safe_fall) + FALL_DMG_EQU_INTERCEPT;
+
+        if (damageperc > 0 && !vehicleBase->IsImmunedToDamageOrSchool(SPELL_SCHOOL_MASK_NORMAL))
+        {
+            uint32 damage = (uint32)(damageperc * vehicleBase->GetMaxHealth() * sWorld->getRate(RATE_DAMAGE_FALL));
+            if (damage > 0)
+            {
+                if (damage > vehicleBase->GetMaxHealth())
+                    damage = vehicleBase->GetMaxHealth();
+
+                Unit::DealDamage(this, vehicleBase, damage, nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
+            }
+        }
     }
 }
 

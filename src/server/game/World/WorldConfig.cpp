@@ -417,6 +417,8 @@ void WorldConfig::BuildConfigCache()
     SetConfigValue<bool>(CONFIG_DEATH_CORPSE_RECLAIM_DELAY_PVE, "Death.CorpseReclaimDelay.PvE", true);
     SetConfigValue<bool>(CONFIG_DEATH_BONES_WORLD, "Death.Bones.World", true);
     SetConfigValue<bool>(CONFIG_DEATH_BONES_BG_OR_ARENA, "Death.Bones.BattlegroundOrArena", true);
+    SetConfigValue<uint32>(CONFIG_DEATH_BONES_EXPIRE_TIME, "Death.Bones.ExpireTime", 3 * DAY);
+    SetConfigValue<uint32>(CONFIG_DEATH_BONES_MAX_PER_PLAYER, "Death.Bones.MaxPerPlayer", 10);
 
     SetConfigValue<bool>(CONFIG_DIE_COMMAND_MODE, "Die.Command.Mode", true);
 

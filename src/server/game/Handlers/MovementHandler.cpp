@@ -648,6 +648,18 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
         }
     }
 
+    if (opcode == MSG_MOVE_FALL_LAND && plrMover && !plrMover->IsInFlight())
+    {
+        plrMover->HandleFall(movementInfo);
+        sScriptMgr->AnticheatSetJumpingbyOpcode(plrMover, false);
+    }
+    else if (opcode == MSG_MOVE_FALL_LAND && !plrMover && !mover->IsInFlight())
+    {
+        if (Unit* vehicleBase = _player->GetVehicleBase())
+            if (vehicleBase == mover)
+                _player->HandleVehicleFall(vehicleBase, movementInfo);
+    }
+
     if (plrMover && ((movementInfo.flags & MOVEMENTFLAG_SWIMMING) != 0) != plrMover->IsInWater())
     {
         // now client not include swimming flag in case jumping under water

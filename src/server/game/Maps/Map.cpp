@@ -45,6 +45,7 @@
 #include "VMapMgr2.h"
 #include "Weather.h"
 #include "WeatherMgr.h"
+#include <algorithm>
 
 #define MAP_INVALID_ZONE        0xFFFFFFFF
 
@@ -3134,12 +3135,54 @@ Corpse* Map::ConvertCorpseToBones(ObjectGuid const& ownerGuid, bool insignia /*=
 
         // add bones in grid store if grid loaded where corpse placed
         AddToMap(bones);
+
+        // persist player skeletons so they survive server restarts (BG/arena bones stay transient)
+        if (!IsBattlegroundOrArena())
+        {
+            bones->SaveBonesToDB();
+            EnforcePlayerBonesLimit(ownerGuid);
+        }
     }
 
     // all references to the corpse should be removed at this point
     delete corpse;
 
     return bones;
+}
+
+// Caps how many persisted skeletons a single player may leave lying around
+// (Death.Bones.ExpireTime keeps every skeleton for days, so a camped spot would
+// otherwise pile up without bound). 0 disables the cap. Oldest skeletons go first.
+void Map::EnforcePlayerBonesLimit(ObjectGuid const& ownerGuid)
+{
+    uint32 const limit = sWorld->getIntConfig(CONFIG_DEATH_BONES_MAX_PER_PLAYER);
+    if (!limit)
+        return;
+
+    std::vector<Corpse*> playerBones;
+    for (Corpse* bones : _corpseBones)
+        if (bones->GetOwnerGUID() == ownerGuid)
+            playerBones.push_back(bones);
+
+    if (playerBones.size() <= limit)
+        return;
+
+    std::sort(playerBones.begin(), playerBones.end(), [](Corpse const* a, Corpse const* b)
+    {
+        return a->GetGhostTime() < b->GetGhostTime();
+    });
+
+    std::size_t const excess = playerBones.size() - limit;
+
+    CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+    for (std::size_t i = 0; i < excess; ++i)
+    {
+        Corpse* bones = playerBones[i];
+        RemoveCorpse(bones);
+        bones->DeleteBonesFromDB(trans);
+        delete bones;
+    }
+    CharacterDatabase.CommitTransaction(trans);
 }
 
 void Map::RemoveOldCorpses()
@@ -3161,11 +3204,25 @@ void Map::RemoveOldCorpses()
         if (bones->IsExpired(now))
             expiredBones.push_back(bones);
 
+    if (expiredBones.empty())
+        return;
+
+    CharacterDatabaseTransaction trans;
+    if (!IsBattlegroundOrArena())
+        trans = CharacterDatabase.BeginTransaction();
+
     for (Corpse* bones : expiredBones)
     {
         RemoveCorpse(bones);
+
+        if (trans)
+            bones->DeleteBonesFromDB(trans);
+
         delete bones;
     }
+
+    if (trans)
+        CharacterDatabase.CommitTransaction(trans);
 }
 
 void Map::ScheduleCreatureRespawn(ObjectGuid creatureGuid, Milliseconds respawnTimer, Position pos)
@@ -3518,45 +3575,65 @@ bool Map::CheckCollisionAndGetValidCoords(WorldObject const* source, float start
 
 void Map::LoadCorpseData()
 {
-    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CORPSES);
-    stmt->SetData(0, GetId());
-    stmt->SetData(1, GetInstanceId());
-
+    // Both queries share the field layout LoadCorpseFromDB expects (field 13 is only
+    // read for resurrectable corpses; character_bones repeats dynFlags there as filler).
     //        0     1     2     3            4      5          6          7       8       9        10     11        12    13          14          15         16
-    // SELECT posX, posY, posZ, orientation, mapId, displayId, itemCache, bytes1, bytes2, guildId, flags, dynFlags, time, corpseType, instanceId, phaseMask, guid FROM corpse WHERE mapId = ? AND instanceId = ?
-    PreparedQueryResult result = CharacterDatabase.Query(stmt);
-    if (!result)
-        return;
-
-    do
+    // SELECT posX, posY, posZ, orientation, mapId, displayId, itemCache, bytes1, bytes2, guildId, flags, dynFlags, time, <slot 13>,  instanceId, phaseMask, ownerGuid
+    auto loadCorpse = [this](Field* fields, CorpseType type)
     {
-        Field* fields = result->Fetch();
-        CorpseType type = CorpseType(fields[13].Get<uint8>());
-        uint32 guid = fields[16].Get<uint32>();
-        if (type >= MAX_CORPSE_TYPE || type == CORPSE_BONES)
-        {
-            LOG_ERROR("maps", "Corpse (guid: {}) have wrong corpse type ({}), not loading.", guid, type);
-            continue;
-        }
-
         Corpse* corpse = new Corpse(type);
 
         if (!corpse->LoadCorpseFromDB(GenerateLowGuid<HighGuid::Corpse>(), fields))
         {
             delete corpse;
-            continue;
+            return;
         }
 
         AddCorpse(corpse);
-
         corpse->UpdatePositionData();
-    } while (result->NextRow());
+    };
+
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CORPSES);
+    stmt->SetData(0, GetId());
+    stmt->SetData(1, GetInstanceId());
+    if (PreparedQueryResult result = CharacterDatabase.Query(stmt))
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            CorpseType type = CorpseType(fields[13].Get<uint8>());
+            if (type >= MAX_CORPSE_TYPE || type == CORPSE_BONES)
+            {
+                LOG_ERROR("maps", "Corpse (guid: {}) have wrong corpse type ({}), not loading.", fields[16].Get<uint32>(), type);
+                continue;
+            }
+
+            loadCorpse(fields, type);
+        } while (result->NextRow());
+    }
+
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_SEL_CHARACTER_BONES);
+    stmt->SetData(0, GetId());
+    stmt->SetData(1, GetInstanceId());
+    if (PreparedQueryResult result = CharacterDatabase.Query(stmt))
+    {
+        do
+        {
+            loadCorpse(result->Fetch(), CORPSE_BONES);
+        } while (result->NextRow());
+    }
 }
 
 void Map::DeleteCorpseData()
 {
     // DELETE FROM corpse WHERE mapId = ? AND instanceId = ?
     CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CORPSES_FROM_MAP);
+    stmt->SetData(0, GetId());
+    stmt->SetData(1, GetInstanceId());
+    CharacterDatabase.Execute(stmt);
+
+    // DELETE FROM character_bones WHERE mapId = ? AND instanceId = ?
+    stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_BONES_FROM_MAP);
     stmt->SetData(0, GetId());
     stmt->SetData(1, GetInstanceId());
     CharacterDatabase.Execute(stmt);

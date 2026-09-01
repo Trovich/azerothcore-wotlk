@@ -1153,13 +1153,6 @@ void Creature::CalculateMinMaxDamage(WeaponAttackType attType, bool normalized, 
     float weaponMinDamage = GetWeaponDamageRange(attType, MINDAMAGE);
     float weaponMaxDamage = GetWeaponDamageRange(attType, MAXDAMAGE);
 
-    // Disarm for creatures
-    if (HasWeapon(attType) && !HasWeaponForAttack(attType))
-    {
-        minDamage *= 0.5f;
-        maxDamage *= 0.5f;
-    }
-
     float attackPower      = GetTotalAttackPowerValue(attType);
     float attackSpeedMulti = GetAPMultiplier(attType, normalized);
     float baseValue        = GetFlatModifierValue(unitMod, BASE_VALUE) + (attackPower / 14.0f) * variance;
@@ -1170,6 +1163,14 @@ void Creature::CalculateMinMaxDamage(WeaponAttackType attType, bool normalized, 
 
     minDamage = ((weaponMinDamage + baseValue) * dmgMultiplier * basePct + totalValue) * totalPct;
     maxDamage = ((weaponMaxDamage + baseValue) * dmgMultiplier * basePct + totalValue) * totalPct;
+
+    // Disarm for creatures: the creature owns a weapon in this slot but currently can't use it (disarmed).
+    // Reduce melee damage by 50% instead of nullifying it (see PR #20015, issue #22612).
+    if (HasWeapon(attType) && !HasWeaponForAttack(attType))
+    {
+        minDamage *= 0.5f;
+        maxDamage *= 0.5f;
+    }
 
     // pussywizard: crashfix (casting negative to uint => min > max => assertion in urand)
     if (minDamage < 0.0f || minDamage > 1000000000.0f)

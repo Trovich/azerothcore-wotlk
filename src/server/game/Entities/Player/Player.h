@@ -2390,6 +2390,7 @@ public:
         m_lastFallZ = z;
     }
     void HandleFall(MovementInfo const& movementInfo);
+    void HandleVehicleFall(Unit* vehicleBase, MovementInfo const& movementInfo); // новое для vehicles
 
     [[nodiscard]] bool canFlyInZone(uint32 mapid, uint32 zone, SpellInfo const* bySpell);
 

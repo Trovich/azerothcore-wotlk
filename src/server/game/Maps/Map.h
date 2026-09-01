@@ -483,6 +483,7 @@ public:
     void AddCorpse(Corpse* corpse);
     void RemoveCorpse(Corpse* corpse);
     Corpse* ConvertCorpseToBones(ObjectGuid const& ownerGuid, bool insignia = false);
+    void EnforcePlayerBonesLimit(ObjectGuid const& ownerGuid);
     void RemoveOldCorpses();
 
     static void DeleteRespawnTimesInDB(uint16 mapId, uint32 instanceId);

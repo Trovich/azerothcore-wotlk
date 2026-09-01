@@ -2767,6 +2767,28 @@ Death.Bones.World               = 1
 Death.Bones.BattlegroundOrArena = 1
 
 #
+#    Death.Bones.ExpireTime
+#        Description: How long a player skeleton (bones) stays in the world after resurrection,
+#                     in seconds. Bones in normal zones/instances are stored in the
+#                     `character_bones` table and survive server restarts; BG/arena bones
+#                     stay transient. A low value clears skeletons quickly; a high value
+#                     fills the world with the skeletons of players who died there.
+#        Default:     259200 - (3 days)
+#                     3600   - (retail-like, 1 hour)
+
+Death.Bones.ExpireTime = 259200
+
+#
+#    Death.Bones.MaxPerPlayer
+#        Description: Maximum number of persisted skeletons a single player may leave in the
+#                     world at once. When exceeded, that player's oldest skeleton is removed.
+#                     Prevents a camped spot from accumulating skeletons without bound.
+#        Default:     10
+#                     0 - (unlimited, only Death.Bones.ExpireTime applies)
+
+Death.Bones.MaxPerPlayer = 10
+
+#
 ###################################################################################################
 
 ###################################################################################################

@@ -303,6 +303,12 @@ void CharacterDatabaseConnection::DoPrepareStatements()
     PrepareStatement(CHAR_DEL_CORPSE, "DELETE FROM corpse WHERE guid = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_DEL_CORPSES_FROM_MAP, "DELETE FROM corpse WHERE mapId = ? AND instanceId = ?", CONNECTION_ASYNC);
     PrepareStatement(CHAR_SEL_CORPSE_LOCATION, "SELECT mapId, posX, posY, posZ, orientation FROM corpse WHERE guid = ?", CONNECTION_ASYNC);
+    // field 13 (dynFlags repeated) is unused filler: LoadCorpseFromDB only reads it for resurrectable corpses
+    PrepareStatement(CHAR_SEL_CHARACTER_BONES, "SELECT posX, posY, posZ, orientation, mapId, displayId, itemCache, bytes1, bytes2, guildId, flags, dynFlags, time, dynFlags, instanceId, phaseMask, ownerGuid FROM character_bones WHERE mapId = ? AND instanceId = ?", CONNECTION_SYNCH);
+    PrepareStatement(CHAR_INS_CHARACTER_BONES, "INSERT INTO character_bones (ownerGuid, posX, posY, posZ, orientation, mapId, displayId, itemCache, bytes1, bytes2, guildId, flags, dynFlags, time, instanceId, phaseMask) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_BONES, "DELETE FROM character_bones WHERE ownerGuid = ? AND time = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_BONES_BY_OWNER, "DELETE FROM character_bones WHERE ownerGuid = ?", CONNECTION_ASYNC);
+    PrepareStatement(CHAR_DEL_CHARACTER_BONES_FROM_MAP, "DELETE FROM character_bones WHERE mapId = ? AND instanceId = ?", CONNECTION_ASYNC);
 
     // Creature respawn
     PrepareStatement(CHAR_SEL_CREATURE_RESPAWNS, "SELECT guid, respawnTime FROM creature_respawn WHERE mapId = ? AND instanceId = ?", CONNECTION_SYNCH);

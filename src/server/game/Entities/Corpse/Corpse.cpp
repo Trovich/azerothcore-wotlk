@@ -128,6 +128,43 @@ void Corpse::DeleteFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransact
     CharacterDatabase.ExecuteOrAppend(trans, stmt);
 }
 
+void Corpse::SaveBonesToDB()
+{
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_INS_CHARACTER_BONES);
+    stmt->SetData(0, GetOwnerGUID().GetCounter());                            // ownerGuid
+    stmt->SetData(1, GetPositionX());                                        // posX
+    stmt->SetData(2, GetPositionY());                                        // posY
+    stmt->SetData(3, GetPositionZ());                                        // posZ
+    stmt->SetData(4, GetOrientation());                                      // orientation
+    stmt->SetData(5, GetMapId());                                            // mapId
+    stmt->SetData(6, GetUInt32Value(CORPSE_FIELD_DISPLAY_ID));               // displayId
+    stmt->SetData(7, _ConcatFields(CORPSE_FIELD_ITEM, EQUIPMENT_SLOT_END));  // itemCache
+    stmt->SetData(8, GetUInt32Value(CORPSE_FIELD_BYTES_1));                  // bytes1
+    stmt->SetData(9, GetUInt32Value(CORPSE_FIELD_BYTES_2));                  // bytes2
+    stmt->SetData(10, GetUInt32Value(CORPSE_FIELD_GUILD));                   // guildId
+    stmt->SetData(11, GetUInt32Value(CORPSE_FIELD_FLAGS));                   // flags
+    stmt->SetData(12, GetUInt32Value(CORPSE_FIELD_DYNAMIC_FLAGS));           // dynFlags
+    stmt->SetData(13, uint32(m_time));                                      // time
+    stmt->SetData(14, GetInstanceId());                                      // instanceId
+    stmt->SetData(15, GetPhaseMask());                                       // phaseMask
+    CharacterDatabase.Execute(stmt);
+}
+
+void Corpse::DeleteBonesFromDB(CharacterDatabaseTransaction trans /*= nullptr*/)
+{
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_BONES);
+    stmt->SetData(0, GetOwnerGUID().GetCounter());
+    stmt->SetData(1, uint32(m_time));
+    CharacterDatabase.ExecuteOrAppend(trans, stmt);
+}
+
+void Corpse::DeleteAllBonesFromDB(ObjectGuid const& ownerGuid, CharacterDatabaseTransaction trans)
+{
+    CharacterDatabasePreparedStatement* stmt = CharacterDatabase.GetPreparedStatement(CHAR_DEL_CHARACTER_BONES_BY_OWNER);
+    stmt->SetData(0, ownerGuid.GetCounter());
+    CharacterDatabase.ExecuteOrAppend(trans, stmt);
+}
+
 bool Corpse::LoadCorpseFromDB(ObjectGuid::LowType guid, Field* fields)
 {
     ObjectGuid::LowType ownerGuid = fields[16].Get<uint32>();
@@ -187,7 +224,7 @@ bool Corpse::IsExpired(time_t t) const
         return true;
 
     if (m_type == CORPSE_BONES)
-        return m_time < t - 60 * MINUTE;
+        return m_time < t - time_t(sWorld->getIntConfig(CONFIG_DEATH_BONES_EXPIRE_TIME));
     else
         return m_time < t - 3 * DAY;
 }
