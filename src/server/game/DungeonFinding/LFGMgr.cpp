@@ -2241,6 +2241,17 @@ namespace lfg
 
         LfgTeleportError error = LFG_TELEPORTERROR_OK;
 
+        // Dungeon Finder configured not to teleport the group in: the LFG group is still
+        // formed as usual, but every member walks to the dungeon entrance themselves.
+        // Deliberately skip Player::SetEntryPoint() here so that leaving the dungeon
+        // returns the player just outside the portal (see Player::TeleportToEntryPoint),
+        // exactly like a non-LFG run, instead of the LFG join position.
+        if (!out && sWorld->getBoolConfig(CONFIG_LFG_SKIP_TELEPORT))
+        {
+            ChatHandler(player->GetSession()).PSendSysMessage("Your group is ready. Make your way to the dungeon entrance.");
+            return;
+        }
+
         if (!player->IsAlive())
         {
             error = LFG_TELEPORTERROR_PLAYER_DEAD;

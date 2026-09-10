@@ -1888,6 +1888,18 @@ bool SpellInfo::CheckTargetCreatureType(Unit const* target) const
             return true;
     }
     uint32 creatureType = target->GetCreatureTypeMask();
+
+    // Exorcism (paladin category 19) and Holy Wrath (category 35) are restricted to
+    // Undead and Demons on this server. Unit::GetCreatureType() reports every player
+    // as CREATURE_TYPE_HUMANOID, so that restriction would lock both spells out of
+    // PvP entirely - Forsaken included. Count an undead-race player as undead so they
+    // stay a valid target.
+    if (SpellFamilyName == SPELLFAMILY_PALADIN && (GetCategory() == 19 || GetCategory() == 35) &&
+        target->IsPlayer() && target->getRace() == RACE_UNDEAD_PLAYER)
+    {
+        creatureType |= 1 << (CREATURE_TYPE_UNDEAD - 1);
+    }
+
     return !TargetCreatureType || !creatureType || (creatureType & TargetCreatureType);
 }
 

@@ -561,6 +561,10 @@ class spell_warr_intimidating_shout : public SpellScript
 };
 
 // -772 - Rend
+// Bleed immunity is not checked here: Rend carries MECHANIC_BLEED on its aura effect,
+// and Unit::IsImmunedToBleed() applies the immunity in the core - consistently with
+// every other bleed of every class - for Undead, Mechanical and Elemental creatures,
+// undead-race players, and the oozes listed in creature_immunities.
 class spell_warr_rend : public AuraScript
 {
     PrepareAuraScript(spell_warr_rend);

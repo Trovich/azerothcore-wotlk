@@ -490,7 +490,19 @@ public:
             Creature* summoned = me->SummonCreature(SpawnAssoc->spawnedCreatureEntry, 0.0f, 0.0f, 0.0f, 0.0f, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT, 300000);
 
             if (summoned)
+            {
                 SpawnedGUID = summoned->GetGUID();
+
+                // A temporary summon keeps the idle movement type it is created with -
+                // only creatures loaded from the `creature` table pick up MovementType.
+                // These guards then hang perfectly still in mid-air for their whole
+                // 5 minute lifetime, which is what players actually see: there are 235
+                // alarm bot / guard post / trip wire triggers across Outland summoning
+                // them, against a single world spawn of Gryphon Rider Guard. Give them a
+                // slow patrol so they read as sentries rather than scenery; MoveChase
+                // from AttackStart() takes over the moment one engages.
+                summoned->GetMotionMaster()->MoveRandom(20.0f);
+            }
             else
             {
                 LOG_ERROR("sql.sql", "TCSR: npc_air_force_bots: wasn't able to spawn Creature {}", SpawnAssoc->spawnedCreatureEntry);

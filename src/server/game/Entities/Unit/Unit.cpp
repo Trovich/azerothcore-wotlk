@@ -9322,13 +9322,6 @@ float Unit::SpellTakenCritChance(Unit const* caster, SpellInfo const* spellProto
                                     crit_chance += aura->GetAmount();
                                 break;
                             }
-                            // Exorcism
-                            else if (spellProto->GetCategory() == 19)
-                            {
-                                if (GetCreatureTypeMask() & CREATURE_TYPEMASK_DEMON_OR_UNDEAD)
-                                    return 100.0f;
-                                break;
-                            }
                             break;
                         case SPELLFAMILY_SHAMAN:
                             // Lava Burst
@@ -10117,6 +10110,26 @@ bool Unit::IsImmunedToSpell(SpellInfo const* spellInfo, Spell const* spell)
     return IsImmunedToSpell(spellInfo, spellCaster, spellSchoolMask);
 }
 
+// Classic-style bleed immunity: Undead, Mechanical and Elemental creatures do not
+// bleed, and neither do undead-race players. Applies to every bleed of every class.
+//
+// Creature types are deliberately not done through creature_immunities. That table
+// marks only 225 of the world DB's 2609 undead as bleed-immune, and 978 of the 4199
+// creatures of these three types carry no immunity set at all - so covering them by
+// data would mean thousands of rows that then have to be maintained for every
+// creature added later. Oozes are the exception and do go through the table: this
+// client build has no CREATURE_TYPE_OOZE, so they cannot be recognised by type.
+bool Unit::IsImmunedToBleed() const
+{
+    if (IsPlayer())
+        return getRace() == RACE_UNDEAD_PLAYER;
+
+    static uint32 constexpr bleedImmuneTypeMask =
+        (1 << (CREATURE_TYPE_UNDEAD - 1)) | (1 << (CREATURE_TYPE_MECHANICAL - 1)) | (1 << (CREATURE_TYPE_ELEMENTAL - 1));
+
+    return (GetCreatureTypeMask() & bleedImmuneTypeMask) != 0;
+}
+
 bool Unit::IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, Unit const* caster /*= nullptr*/) const
 {
     if (!spellInfo || !spellInfo->Effects[index].IsEffect())
@@ -10148,6 +10161,9 @@ bool Unit::IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, Unit
     {
         auto const& mechanicList = m_spellImmune[IMMUNITY_MECHANIC];
         if (mechanicList.count(mechanic) > 0)
+            return true;
+
+        if (mechanic == MECHANIC_BLEED && IsImmunedToBleed())
             return true;
     }
 
@@ -14440,6 +14456,32 @@ void Unit::SetStunned(bool apply)
 
     if (apply)
     {
+        // The client turns a creature toward whatever is in its UNIT_FIELD_TARGET; the
+        // server only refreshes m_orientation when chase movement ends (see
+        // ChaseMovementGenerator::DoUpdate -> SetInFront). For a creature that has been
+        // standing in melee while the player circled it, the stored orientation is stale
+        // by however far the player moved. SetTarget() below drops UNIT_FIELD_TARGET, the
+        // client falls back to that stale value, and the creature visibly snaps sideways
+        // or shows its back the instant the stun lands. Re-face the victim and broadcast
+        // the orientation first. This has to happen before SetRooted(), because
+        // SendMovementFlagUpdate() refuses to send a heartbeat for a rooted unit.
+        //
+        // Gated to victims already within a wide (120 deg) forward arc: a stealth opener
+        // (e.g. Cheap Shot) also lands with GetVictim() already set - the preceding damage
+        // effect in the same spell cast puts the attacker on the threat/victim list before
+        // this stun effect runs - so checking "has a victim" alone can't tell a stale
+        // face-to-face fight apart from a surprise hit from outside the creature's field of
+        // view. Only the former should snap the facing; the latter must keep the creature
+        // facing wherever it already was; it never saw the attack coming.
+        if (Creature const* creature = ToCreature())
+            if (Unit const* victim = GetVictim())
+                if (!HasUnitFlag(UNIT_FLAG_STUNNED) && !IsRooted() && !creature->HasSpellFocus()
+                    && HasInArc(2.0f * float(M_PI) / 3.0f, victim))
+                {
+                    UpdateOrientation(GetAngle(victim));
+                    SendMovementFlagUpdate();
+                }
+
         SetTarget();
         SetUnitFlag(UNIT_FLAG_STUNNED);
 

@@ -3484,6 +3484,18 @@ void Spell::EffectWeaponDmg(SpellEffIndex effIndex)
                         spell_bonus += int32(0.08f * m_caster->GetTotalAttackPowerValue(BASE_ATTACK));
                         spell_bonus += int32(0.13f * m_caster->SpellBaseDamageBonusDone(m_spellInfo->GetSchoolMask()));
                         break;
+                    case 20424: // Seal of Command - the per-swing holy strike
+                        // SPELL_EFFECT_WEAPON_PERCENT_DAMAGE draws its scaling from the
+                        // weapon swing, which carries attack power but no spell power:
+                        // weapon damage effects go down MeleeDamageBonusDone, never the
+                        // spell damage path, so the holy school of the hit buys it
+                        // nothing. Classic never needed a coefficient here because
+                        // retribution gear carried no spell damage at all, but WotLK
+                        // retribution converts a large slice of attack power into holy
+                        // spell power (Sheath of Light), which Seal of Righteousness
+                        // scales off and this strike would not.
+                        spell_bonus += int32(0.7f * m_caster->SpellBaseDamageBonusDone(m_spellInfo->GetSchoolMask()));
+                        break;
                     case 53385:  // Divine Storm deals normalized damage
                         normalized = true;
                         break;

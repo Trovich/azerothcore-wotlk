@@ -2380,23 +2380,26 @@ class spell_q12919_gymers_throw : public SpellScript
 
 #define QUEST_CROW_TRANSFORM 9718
 
-// spell 38776
-    class spell_q9718_crow_transform : public AuraScript
+// 31746 - Stormcrow Shape (server-side; applied by spell_linked_spell from
+// 31606 "Stormcrow Amulet", which also sends the player down taxi path 512).
+// Its 155 sec duration outlasts the 145 sec flight, and Ysiel Windsinger's
+// SmartAI strips the aura on landing - either way the quest completes here.
+class spell_q9718_crow_transform : public AuraScript
+{
+    PrepareAuraScript(spell_q9718_crow_transform)
+
+    void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
     {
-        PrepareAuraScript(spell_q9718_crow_transform)
+        if (GetOwner())
+            if (Player* player = GetOwner()->ToPlayer())
+                player->CompleteQuest(QUEST_CROW_TRANSFORM);
+    }
 
-        void HandleEffectRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
-        {
-            if (GetOwner())
-                if (Player* player = GetOwner()->ToPlayer())
-                    player->CompleteQuest(QUEST_CROW_TRANSFORM);
-        }
-
-        void Register() override
-        {
-            OnEffectRemove += AuraEffectRemoveFn(spell_q9718_crow_transform::HandleEffectRemove, EFFECT_0, SPELL_AURA_TRANSFORM, AURA_EFFECT_HANDLE_REAL_OR_REAPPLY_MASK);
-        }
-    };
+    void Register() override
+    {
+        OnEffectRemove += AuraEffectRemoveFn(spell_q9718_crow_transform::HandleEffectRemove, EFFECT_0, SPELL_AURA_TRANSFORM, AURA_EFFECT_HANDLE_REAL_OR_REAPPLY_MASK);
+    }
+};
 
 enum QuestShyRotam
 {

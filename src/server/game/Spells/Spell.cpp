@@ -1754,7 +1754,26 @@ void Spell::SelectImplicitTargetDestTargets(SpellEffIndex effIndex, SpellImplici
 
             if (targetType.GetTarget() == TARGET_DEST_TARGET_BACK)
             {
-                dist += target->GetFloatValue(UNIT_FIELD_BOUNDINGRADIUS);
+                // Push the destination clear of the target's bounding radius, same as
+                // stock. That alone is enough for almost every mob: the spell's own
+                // radius (2-5 yd) plus a normal bounding radius (0.3-2 yd) already lands
+                // outside a normal humanoid's combat reach (~1.5 yd) - the value
+                // WorldObject::CanDetectStealthOf() guarantees detection inside of,
+                // regardless of facing.
+                //
+                // It stops being enough on oversized models, where combat reach dwarfs
+                // the bounding radius: Fen Strider (18134) is reach 6.0 against radius
+                // 0.70, Withered Giant (18124) reach 3.75 against radius 0.39. A 2 yd
+                // Shadowstep behind either used to land well inside that circle and break
+                // stealth on arrival. Only bump the offset up there, and only by exactly
+                // enough to clear the circle (plus a hair) - not out to the full reach -
+                // so normal-sized targets keep the tight stock placement and giants land
+                // just past the line instead of several yards further out.
+                float offset = target->GetFloatValue(UNIT_FIELD_BOUNDINGRADIUS);
+                if (float const combatReach = target->GetObjectSize(); dist + offset < combatReach)
+                    offset = combatReach - dist + 0.1f;
+
+                dist += offset;
             }
 
             Position pos = dest._position;

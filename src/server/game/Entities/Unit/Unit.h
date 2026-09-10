@@ -1655,6 +1655,7 @@ public:
     [[nodiscard]] bool IsImmunedToDamageOrSchool(SpellSchoolMask schoolMask) const;
     [[nodiscard]] bool IsImmunedToAuraPeriodicTick(Unit const* caster, SpellInfo const* spellInfo) const;
     virtual bool IsImmunedToSpellEffect(SpellInfo const* spellInfo, uint32 index, Unit const* caster = nullptr) const;
+    [[nodiscard]] bool IsImmunedToBleed() const;
 
     // Critic chances
     bool isBlockCritical();

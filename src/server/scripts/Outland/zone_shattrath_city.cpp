@@ -16,6 +16,7 @@
  */
 
 #include "CreatureScript.h"
+#include "Group.h"
 #include "PassiveAI.h"
 #include "Player.h"
 #include "ScriptedCreature.h"
@@ -51,6 +52,11 @@ enum KServant
     WHISP21    = 21
 };
 
+// Everyone in the quest owner's group walks the tour with them, so the story
+// whispers are sent to each member within sight of the servant instead of only
+// to the player who triggered the escort.
+constexpr float KSERVANT_WHISPER_RANGE = 100.0f;
+
 class npc_kservant : public CreatureScript
 {
 public:
@@ -66,6 +72,24 @@ public:
     public:
         npc_kservantAI(Creature* creature) : npc_escortAI(creature) { }
 
+        // creature_text groups 1-21 are CHAT_MSG_MONSTER_WHISPER, which reaches a
+        // single player. Repeat the line for every group member that can see the
+        // servant so the whole party gets the tour, not just the escort owner.
+        void TalkToEscortGroup(uint8 textGroup, Player* owner)
+        {
+            Group* group = owner->GetGroup();
+            if (!group)
+            {
+                Talk(textGroup, owner);
+                return;
+            }
+
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+                if (Player* member = itr->GetSource())
+                    if (me->IsWithinDistInMap(member, KSERVANT_WHISPER_RANGE))
+                        Talk(textGroup, member);
+        }
+
         using CreatureAI::WaypointReached;
         void WaypointReached(uint32 waypointId) override
         {
@@ -79,67 +103,67 @@ public:
                     Talk(SAY1, player);
                     break;
                 case 4:
-                    Talk(WHISP1, player);
+                    TalkToEscortGroup(WHISP1, player);
                     break;
                 case 6:
-                    Talk(WHISP2, player);
+                    TalkToEscortGroup(WHISP2, player);
                     break;
                 case 7:
-                    Talk(WHISP3, player);
+                    TalkToEscortGroup(WHISP3, player);
                     break;
                 case 8:
-                    Talk(WHISP4, player);
+                    TalkToEscortGroup(WHISP4, player);
                     break;
                 case 17:
-                    Talk(WHISP5, player);
+                    TalkToEscortGroup(WHISP5, player);
                     break;
                 case 18:
-                    Talk(WHISP6, player);
+                    TalkToEscortGroup(WHISP6, player);
                     break;
                 case 19:
-                    Talk(WHISP7, player);
+                    TalkToEscortGroup(WHISP7, player);
                     break;
                 case 33:
-                    Talk(WHISP8, player);
+                    TalkToEscortGroup(WHISP8, player);
                     break;
                 case 34:
-                    Talk(WHISP9, player);
+                    TalkToEscortGroup(WHISP9, player);
                     break;
                 case 35:
-                    Talk(WHISP10, player);
+                    TalkToEscortGroup(WHISP10, player);
                     break;
                 case 36:
-                    Talk(WHISP11, player);
+                    TalkToEscortGroup(WHISP11, player);
                     break;
                 case 43:
-                    Talk(WHISP12, player);
+                    TalkToEscortGroup(WHISP12, player);
                     break;
                 case 44:
-                    Talk(WHISP13, player);
+                    TalkToEscortGroup(WHISP13, player);
                     break;
                 case 49:
-                    Talk(WHISP14, player);
+                    TalkToEscortGroup(WHISP14, player);
                     break;
                 case 50:
-                    Talk(WHISP15, player);
+                    TalkToEscortGroup(WHISP15, player);
                     break;
                 case 51:
-                    Talk(WHISP16, player);
+                    TalkToEscortGroup(WHISP16, player);
                     break;
                 case 52:
-                    Talk(WHISP17, player);
+                    TalkToEscortGroup(WHISP17, player);
                     break;
                 case 53:
-                    Talk(WHISP18, player);
+                    TalkToEscortGroup(WHISP18, player);
                     break;
                 case 54:
-                    Talk(WHISP19, player);
+                    TalkToEscortGroup(WHISP19, player);
                     break;
                 case 55:
-                    Talk(WHISP20, player);
+                    TalkToEscortGroup(WHISP20, player);
                     break;
                 case 56:
-                    Talk(WHISP21, player);
+                    TalkToEscortGroup(WHISP21, player);
                     player->GroupEventHappens(10211, me);
                     break;
             }

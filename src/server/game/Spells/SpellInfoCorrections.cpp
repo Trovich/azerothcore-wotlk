@@ -90,6 +90,24 @@ void SpellMgr::LoadSpellInfoCorrections()
         spellInfo->DurationEntry = sSpellDurationStore.LookupEntry(4); // 120 seconds
     });
 
+    // Stormcrow Shape - quest 9718 "As the Crow Flies". Applied by the Stormcrow
+    // Amulet (31606) alongside SPELL_EFFECT_SEND_TAXI down path 512 (25 nodes,
+    // 4640.6 yd, ~145.0s at PLAYER_FLIGHT_SPEED). Stock duration is 155s
+    // (SpellDuration.dbc index 554) - once the OOC_LOS-based removal on Ysiel
+    // Windsinger no longer sits behind an unrelated cooldown (see the
+    // pending_db_world fix for entry 17841), that ~10s of slack is no longer
+    // needed as a fallback for a flight path that clips her vision early.
+    // Trimmed to 149s: enough buffer to never expire mid-flight, tight enough
+    // that even the natural-expiry fallback path doesn't linger noticeably
+    // past landing. No existing SpellDuration.dbc entry has this exact value
+    // (130 records checked; the two nearest are 150000 and 155000ms), so this
+    // points at a small local override instead of reusing an unrelated entry.
+    ApplySpellFix({ 31746 }, [](SpellInfo* spellInfo)
+    {
+        static SpellDurationEntry const stormcrowShapeDuration{ 0, { 149000, 0, 149000 } };
+        spellInfo->DurationEntry = &stormcrowShapeDuration;
+    });
+
     ApplySpellFix({
         63026, // Force Cast (HACK: Target shouldn't be changed)
         63137  // Force Cast (HACK: Target shouldn't be changed; summon position should be untied from spell destination)
@@ -586,7 +604,56 @@ void SpellMgr::LoadSpellInfoCorrections()
     ApplySpellFix({ 20424 }, [](SpellInfo* spellInfo)
     {
         spellInfo->AttributesEx3 &= ~SPELL_ATTR3_SUPPRESS_CASTER_PROCS;
+
+        // The classic 70% weapon damage lives in this server's Spell.dbc
+        // (EffectBasePoints[0] 35 -> 70); re-applying it here would be a no-op.
+        // Note the effective percent is 71: EffectDieSides[0] is 1, and
+        // SpellEffectInfo::CalcValue adds 1 for that.
+
+        // Classic Seal of Command hits a single target. Cutting ChainTarget to 1
+        // makes that structural: SelectImplicitChainTargets skips the whole
+        // chain-search branch, so the hit no longer depends on the SpellScript
+        // clearing the extra targets afterwards.
+        spellInfo->Effects[EFFECT_0].ChainTarget = 1;
     });
+
+    // Seal of Command (20375): point the seal's "Judgement effect" dummy at the
+    // generic Judgement damage wrapper (54158) instead of the stock 20425.
+    // spell_pal_judgement then computes Judgement of Command's classic formula and
+    // casts it as custom damage. Stock would go 20425 -> spell_pal_judgement_of_command
+    // -> 20467, which is pure weapon-percent damage with no attack power or spell
+    // power scaling; note that leaves spell_pal_judgement_of_command unreachable.
+    ApplySpellFix({ 20375 }, [](SpellInfo* spellInfo)
+    {
+        // EFFECT_2's dummy amount is read via AuraEffect::GetAmount() (i.e.
+        // CalcValue()), which adds 1 when DieSides is 1 - that is how the stock
+        // BasePoints of 20424 resolves to 20425. Zero DieSides out so the amount
+        // resolves to exactly 54158.
+        spellInfo->Effects[EFFECT_2].BasePoints = 54158; // Judgement (generic Holy damage wrapper)
+        spellInfo->Effects[EFFECT_2].DieSides = 0;
+    });
+
+    // Paladin seals - the classic/TBC 30 sec duration (DurationIndex 30 -> 9) and
+    // the blessings' 5 min duration (6 -> 5) live in this server's Spell.dbc, so
+    // they are deliberately not repeated here: a DurationEntry fix would be a
+    // no-op, and keeping the value in the DBC also fixes the client tooltip.
+
+    // Paladin seals - cheaper cast, to match the classic/TBC-style frequent
+    // recast (30 sec + consumed by Judgement) instead of WotLK's "cast once
+    // every 30 min" economy. 14% of base mana was tuned for the rare recast;
+    // paying that every ~30 sec compounds into far more mana than TBC's seals
+    // ever cost even at their own (much more frequent) recast rate.
+    ApplySpellFix({
+        20164, 20165, 20166, 20375, 21084, 31801, 53736
+        }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->ManaCostPercentage = 5;
+    });
+
+    // Judgements of the Wise (31930, 10% of base mana instead of 25%) and Exorcism
+    // (TargetCreatureType Undead|Demon on all nine ranks) are likewise set in this
+    // server's Spell.dbc. Repeating them here would be a no-op, and the C++ list
+    // was also missing ranks 27138 / 48800 / 48801.
 
     // Vindication
     ApplySpellFix({ 67, 26017}, [](SpellInfo* spellInfo)

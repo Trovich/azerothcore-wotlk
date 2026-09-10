@@ -588,6 +588,7 @@ void WorldConfig::BuildConfigCache()
     SetConfigValue<bool>(CONFIG_LFG_CAST_DESERTER, "DungeonFinder.CastDeserter", true);
     SetConfigValue<bool>(CONFIG_LFG_ALLOW_COMPLETED, "DungeonFinder.AllowCompleted", true);
     SetConfigValue<uint32>(CONFIG_LFG_DUNGEON_SELECTION_COOLDOWN, "DungeonFinder.DungeonSelectionCooldown", 0);
+    SetConfigValue<bool>(CONFIG_LFG_SKIP_TELEPORT, "DungeonFinder.SkipTeleport", false);
 
     // DBC_ItemAttributes
     SetConfigValue<bool>(CONFIG_DBC_ENFORCE_ITEM_ATTRIBUTES, "DBC.EnforceItemAttributes", true);

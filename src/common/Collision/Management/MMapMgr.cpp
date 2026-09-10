@@ -121,13 +121,27 @@ namespace MMAP
         return false;
     }
 
+    // A* node budget for a single dtNavMeshQuery. Detour searches by straight-line
+    // heuristic, so a destination that is close as the crow flies but has to be walked
+    // around burns nodes fast; when the pool runs out it returns DT_PARTIAL_RESULT with
+    // the path to whichever polygon ended up nearest the goal, which callers cannot tell
+    // apart from an ordinary truncated long path.
+    //
+    // Measured against the shipped mmaps: walking from the Hellfire Ramparts / Shattered
+    // Halls doorway to the Blood Furnace doorway is 81 yd in a straight line, but the only
+    // route runs ~230 yd west along the canyon, up the stairs onto the dividing wall and
+    // back east along the top - 2165 nodes. At 1024 the search gave up with its best node
+    // still 70 yd out, i.e. never leaving ground level, so anything walking there (bots
+    // especially) parked below the wall and re-planned the same dead end forever.
+    constexpr int NAVMESH_QUERY_MAX_NODES = 4096;
+
     ManagedNavMeshQuery MMapMgr::CreateNavMeshQuery(dtNavMesh* navMesh)
     {
         // allocate mesh query
         dtNavMeshQuery* query = dtAllocNavMeshQuery();
         ASSERT(query);
 
-        if (dtStatusFailed(query->init(navMesh, 1024)))
+        if (dtStatusFailed(query->init(navMesh, NAVMESH_QUERY_MAX_NODES)))
         {
             dtFreeNavMeshQuery(query);
             return nullptr;

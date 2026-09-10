@@ -17,6 +17,7 @@
 
 #include "GameTime.h"
 #include "Group.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "SpellAuraEffects.h"
 #include "SpellMgr.h"
@@ -159,6 +160,33 @@ enum PaladinProcSpells
     SPELL_PALADIN_T8_HOLY_4P_BONUS               = 64895
 };
 
+// Judgement of Command - classic/TBC style burst, rebuilt for WotLK's rankless seals.
+//
+// TBC gave Judgement of Command six ranks with a flat base damage each; 3.3.5's
+// Spell.dbc only still carries rank 1 (spell 20467, spell level 20 - the level the
+// Retribution talent first becomes reachable), the higher ranks were stripped. With
+// one rankless seal there is nothing to hang per-rank numbers on, so the base is a
+// straight line across the levels the seal is usable at instead.
+//
+// The base is deliberately small and near flat. Attack power and spell power grow
+// far faster than levels do, so a steep base overshoots badly in the level 40-60
+// band, where a paladin has plenty of levels but very little gear scaling yet. Its
+// only job is to keep the judgement from being negligible at level 20; past ~level
+// 60 the coefficients carry it and the base is noise.
+//
+// Coefficients sit just above Judgement of Righteousness (spell_bonus_data entry
+// 20187: ap_bonus 0.2, direct_bonus 0.32). The weapon damage term on top is Seal of
+// Command's own identity - it is what makes a slow two-hander the seal's weapon of
+// choice. Tuned so Seal of Command stays ahead of Seal of Righteousness at every
+// level without running away: roughly +25% at level 60, +5% at level 80.
+constexpr uint8 JUDGEMENT_OF_COMMAND_MIN_LEVEL      = 20;
+constexpr uint8 JUDGEMENT_OF_COMMAND_MAX_LEVEL      = 80;
+constexpr float JUDGEMENT_OF_COMMAND_BASE_AT_MIN    = 20.0f;
+constexpr float JUDGEMENT_OF_COMMAND_BASE_PER_LEVEL = 0.5f;  // 20 at level 20 -> 50 at level 80
+constexpr float JUDGEMENT_OF_COMMAND_WEAPON_COEFF   = 0.25f;
+constexpr float JUDGEMENT_OF_COMMAND_AP_COEFF       = 0.23f;
+constexpr float JUDGEMENT_OF_COMMAND_SP_COEFF       = 0.34f;
+
 static bool IsJudgementDamageSpell(SpellInfo const* spellInfo)
 {
     return spellInfo &&
@@ -171,6 +199,29 @@ static bool HasJudgementsOfTheJust(Unit const* caster)
     return caster && caster->GetAuraEffect(
         SPELL_AURA_ADD_FLAT_MODIFIER, SPELLFAMILY_PALADIN,
         PALADIN_ICON_JUDGEMENTS_OF_THE_JUST, 0) != nullptr;
+}
+
+// Only one seal can be up at a time. Identify it by spell specific rather than
+// by effect layout: Seal of Justice/Light/Wisdom carry no EFFECT_2 dummy, so
+// scanning for the seal's judgement sub-spell would miss them.
+static uint32 GetActiveSealId(Unit const* caster)
+{
+    if (!caster)
+        return 0;
+
+    for (auto const& itr : caster->GetAppliedAuras())
+    {
+        Aura const* aura = itr.second->GetBase();
+
+        // Seals are always self-cast. Their target-side debuffs (Holy Vengeance,
+        // Blood Corruption) share the seal spell specific, so an enemy paladin's
+        // stacks sitting on us would match without the caster check.
+        if (aura->GetCasterGUID() == caster->GetGUID() &&
+            aura->GetSpellInfo()->GetSpellSpecific() == SPELL_SPECIFIC_SEAL)
+            return itr.first;
+    }
+
+    return 0;
 }
 
 class spell_pal_seal_of_command_aura : public AuraScript
@@ -190,6 +241,17 @@ class spell_pal_seal_of_command_aura : public AuraScript
             {
                 return false;
             }
+
+            // The extra strike fired by HandleProc is itself a Paladin melee spell.
+            // If it is allowed back into the proc system, Seal of Command chain-procs
+            // off its own hits: in-game that reads as bursts where it lands on nearly
+            // every swing, split by long stretches where it never fires. Classic Seal
+            // of Command only ever procced from the white swing (and, in WotLK, melee
+            // specials), never from its own holy strike.
+            if (procSpell->Id == GetSpellInfo()->Effects[EFFECT_0].TriggerSpell)
+            {
+                return false;
+            }
         }
 
         return true;
@@ -198,22 +260,48 @@ class spell_pal_seal_of_command_aura : public AuraScript
     void HandleProc(AuraEffect const* aurEff, ProcEventInfo& eventInfo)
     {
         PreventDefaultAction();
-        // All melee procs should cleave except Hammer of the Righteous.
-        // Judgement cleave is handled separately via JotJ code path.
-        int32 targets = 3;
-        if (SpellInfo const* procSpell = eventInfo.GetSpellInfo())
-        {
-            // HotR: flag1 0x40000, DS: flag1 0x20000
-            if (procSpell->SpellFamilyName == SPELLFAMILY_PALADIN &&
-                (procSpell->SpellFamilyFlags[1] & 0x60000))
-                targets = 1;
-        }
 
         Unit* target = eventInfo.GetActionTarget();
-        if (target->IsAlive())
+        if (!target->IsAlive())
+            return;
+
+        Unit* caster = eventInfo.GetActor();
+        ObjectGuid const targetGuid = target->GetGUID();
+        uint32 const triggerSpellId = aurEff->GetSpellInfo()->Effects[EFFECT_0].TriggerSpell;
+        // Resolved again inside the delayed event: the seal can be gone by then
+        // (30 sec duration, and Judgement consumes it), so the AuraEffect* must
+        // not be captured.
+        uint32 const sealSpellId = aurEff->GetId();
+        uint8 const sealEffIndex = aurEff->GetEffIndex();
+
+        // Classic Seal of Command landed as an extra strike *after* the swing
+        // that procced it, not inside it. Firing on the same tick leaves the
+        // model mid-auto-attack, so the special-attack animation is squeezed
+        // into the same window as the white swing - the client can only play
+        // one upper-body animation at a time, so the special attack either
+        // overlaps the swing or visually replaces it. A full 1 sec delay clears
+        // the swing animation with margin, so the strike gets its own clean
+        // animation and reads as a distinct follow-up hit rather than part of
+        // the auto-attack that triggered it.
+        caster->m_Events.AddEventAtOffset([caster, targetGuid, triggerSpellId, sealSpellId, sealEffIndex]()
         {
-            eventInfo.GetActor()->CastCustomSpell(aurEff->GetSpellInfo()->Effects[EFFECT_0].TriggerSpell, SPELLVALUE_MAX_TARGETS, targets, target, false, nullptr, aurEff);
-        }
+            Unit* strikeTarget = ObjectAccessor::GetUnit(*caster, targetGuid);
+            if (!strikeTarget || !strikeTarget->IsAlive())
+                return;
+
+            caster->HandleEmoteCommand(EMOTE_ONESHOT_SPECIALATTACK1H);
+            // Triggered, but with proc events left on. A plain `true` here means
+            // TRIGGERED_FULL_MASK, which includes TRIGGERED_DISALLOW_PROC_EVENTS and
+            // stops the strike proccing anything at all - weapon enchants, trinkets,
+            // Righteous Vengeance - not just itself. Self-proccing is already blocked
+            // by the trigger-spell guard in CheckProc. The rest of the mask still
+            // matters: the strike fires a second after the swing, so it must not be
+            // refused for a cast already in progress or for the target having stepped
+            // out of range. Single target: no cleave, matching classic.
+            AuraEffect const* sealEff = caster->GetAuraEffect(sealSpellId, sealEffIndex);
+            caster->CastCustomSpell(triggerSpellId, SPELLVALUE_MAX_TARGETS, 1, strikeTarget,
+                TriggerCastFlags(TRIGGERED_FULL_MASK & ~TRIGGERED_DISALLOW_PROC_EVENTS), nullptr, sealEff);
+        }, Milliseconds(1000));
     }
 
     void Register() override
@@ -958,11 +1046,16 @@ public:
 
     bool Validate(SpellInfo const* /*spellInfo*/) override
     {
-        return ValidateSpellInfo({ SPELL_PALADIN_JUDGEMENT_DAMAGE, _spellId });
+        return ValidateSpellInfo({ SPELL_PALADIN_JUDGEMENT_DAMAGE, SPELL_IMPROVED_JUDGEMENT_ENERGIZE,
+            SPELL_JUDGEMENTS_OF_THE_JUST, _spellId });
     }
 
     void HandleScriptEffect(SpellEffIndex /*effIndex*/)
     {
+        Unit* target = GetHitUnit();
+        if (!target)
+            return;
+
         uint32 spellId2 = SPELL_PALADIN_JUDGEMENT_DAMAGE;
 
         // some seals have SPELL_AURA_DUMMY in EFFECT_2
@@ -977,8 +1070,60 @@ public:
                 }
         }
 
-        GetCaster()->CastSpell(GetHitUnit(), _spellId, true);
-        GetCaster()->CastSpell(GetHitUnit(), spellId2, true);
+        // Resolved before the casts below so the seal that was judged with is
+        // the one consumed, whatever those casts end up doing.
+        uint32 const activeSealId = GetActiveSealId(GetCaster());
+
+        GetCaster()->CastSpell(target, _spellId, true);
+
+        if (activeSealId == SPELL_PALADIN_SEAL_OF_COMMAND)
+        {
+            // Classic/TBC Judgement of Command: the burst half of Seal of Command,
+            // distinct from the seal's per-swing proc (a flat % of weapon damage).
+            // Doubled against a stunned or incapacitated target - the classic
+            // Hammer of Justice opener.
+            //
+            // This is the whole damage. 54158 carries spell_bonus_data coefficients
+            // for the WotLK judgements of Justice/Light/Wisdom, which would be added
+            // on top of the amount computed here and count attack power and spell
+            // power twice - spell_pal_judgement_damage suppresses them for this path.
+            Unit* caster = GetCaster();
+            float const ap = caster->GetTotalAttackPowerValue(BASE_ATTACK);
+            float const holy = float(caster->SpellBaseDamageBonusDone(SPELL_SCHOOL_MASK_HOLY));
+
+            // Base weapon damage only - the attack power term below is separate, so
+            // taking the full swing here would count attack power twice.
+            float mwbMin = 0.f, mwbMax = 0.f;
+            for (uint8 i = 0; i < MAX_ITEM_PROTO_DAMAGES; ++i)
+            {
+                mwbMin += caster->GetWeaponDamageRange(BASE_ATTACK, MINDAMAGE, i);
+                mwbMax += caster->GetWeaponDamageRange(BASE_ATTACK, MAXDAMAGE, i);
+            }
+            float const weaponDamage = (mwbMin + mwbMax) / 2.0f;
+
+            uint8 level = caster->GetLevel();
+            if (level < JUDGEMENT_OF_COMMAND_MIN_LEVEL)
+                level = JUDGEMENT_OF_COMMAND_MIN_LEVEL;
+            else if (level > JUDGEMENT_OF_COMMAND_MAX_LEVEL)
+                level = JUDGEMENT_OF_COMMAND_MAX_LEVEL;
+
+            float const base = JUDGEMENT_OF_COMMAND_BASE_AT_MIN +
+                JUDGEMENT_OF_COMMAND_BASE_PER_LEVEL * float(level - JUDGEMENT_OF_COMMAND_MIN_LEVEL);
+
+            int32 damage = int32(base +
+                JUDGEMENT_OF_COMMAND_WEAPON_COEFF * weaponDamage +
+                JUDGEMENT_OF_COMMAND_AP_COEFF * ap +
+                JUDGEMENT_OF_COMMAND_SP_COEFF * holy);
+
+            if (target->HasUnitState(UNIT_STATE_STUNNED) || target->HasAuraType(SPELL_AURA_MOD_CONFUSE))
+                damage *= 2;
+
+            caster->CastCustomSpell(spellId2, SPELLVALUE_BASE_POINT0, damage, target, true);
+        }
+        else
+        {
+            GetCaster()->CastSpell(target, spellId2, true);
+        }
 
         // Tier 5 Holy - 2 Set
         if (GetCaster()->HasAura(SPELL_IMPROVED_JUDGEMENT))
@@ -989,23 +1134,16 @@ public:
         // Judgements of the Just
         if (HasJudgementsOfTheJust(GetCaster()))
         {
-            GetCaster()->CastSpell(GetHitUnit(), SPELL_JUDGEMENTS_OF_THE_JUST, true);
+            GetCaster()->CastSpell(target, SPELL_JUDGEMENTS_OF_THE_JUST, true);
+        }
 
-            // JotJ makes Judgements trigger Seal of Command's
-            // cleave effect
-            if (AuraEffect const* socEff =
-                GetCaster()->GetAuraEffect(
-                    SPELL_PALADIN_SEAL_OF_COMMAND, EFFECT_0))
-            {
-                if (GetHitUnit()->IsAlive())
-                {
-                    GetCaster()->CastCustomSpell(
-                        socEff->GetSpellInfo()->Effects[EFFECT_0]
-                            .TriggerSpell,
-                        SPELLVALUE_MAX_TARGETS, 3,
-                        GetHitUnit(), true, nullptr, socEff);
-                }
-            }
+        // Classic/TBC behaviour: Judgement consumes the seal it judged with,
+        // instead of leaving it up. Pairs with the 30 sec seal duration this
+        // server's Spell.dbc carries - Judgement is meant to be the common way
+        // a seal gets removed early.
+        if (activeSealId)
+        {
+            GetCaster()->RemoveAurasDueToSpell(activeSealId);
         }
     }
 
@@ -1016,6 +1154,43 @@ public:
 
 private:
     uint32 const _spellId;
+};
+
+// 54158 - Judgement
+//
+// The generic Judgement damage, used by Seal of Justice / Light / Wisdom, which carry
+// no judgement sub-spell of their own. Its attack power and spell power scaling comes
+// from spell_bonus_data and is left alone for those three - that is the WotLK design.
+//
+// Seal of Command is the exception: spell_pal_judgement computes Judgement of Command's
+// classic formula itself and passes the finished number as SPELLVALUE_BASE_POINT0, so
+// the coefficients must not be applied a second time on top of it. Take the value
+// verbatim in that case, applying only the target-side modifiers.
+class spell_pal_judgement_damage : public SpellScript
+{
+    PrepareSpellScript(spell_pal_judgement_damage);
+
+    void HandleDamage(SpellEffIndex effIndex)
+    {
+        Unit* caster = GetCaster();
+        Unit* target = GetHitUnit();
+        if (!caster || !target)
+            return;
+
+        // Only one seal can be up, and the seal is consumed after this cast, so it is
+        // still the one the judgement was cast with.
+        if (GetActiveSealId(caster) != SPELL_PALADIN_SEAL_OF_COMMAND)
+            return;
+
+        PreventHitDefaultEffect(effIndex);
+        SetHitDamage(int32(target->SpellDamageBonusTaken(caster, GetSpellInfo(),
+            uint32(std::max(GetEffectValue(), 0)), SPELL_DIRECT_DAMAGE)));
+    }
+
+    void Register() override
+    {
+        OnEffectLaunchTarget += SpellEffectFn(spell_pal_judgement_damage::HandleDamage, EFFECT_0, SPELL_EFFECT_SCHOOL_DAMAGE);
+    }
 };
 
 // 20425 - Judgement of Command
@@ -1249,6 +1424,12 @@ class spell_pal_judgements_of_the_wise : public AuraScript
     void HandleProc(AuraEffect const* aurEff, ProcEventInfo& /*eventInfo*/)
     {
         PreventDefaultAction();
+
+        // No extra roll here: the proc chance already comes from the talent's own
+        // ranks. spell_proc's `-31876` row leaves Chance and ProcsPerMinute at 0,
+        // so SpellMgr::LoadSpellProcs falls back to SpellInfo::ProcChance, which
+        // this server's Spell.dbc sets to 10/20/30 per rank. Rolling again on top
+        // multiplied the two and cut the talent to 3/6/9%.
         Unit* caster = GetTarget();
         caster->CastSpell(caster, SPELL_PALADIN_JUDGEMENTS_OF_THE_WISE_MANA, true, nullptr, aurEff);
         caster->CastSpell(caster, SPELL_PALADIN_REPLENISHMENT, true, nullptr, aurEff);
@@ -2299,6 +2480,7 @@ void AddSC_paladin_spell_scripts()
     RegisterSpellScriptWithArgs(spell_pal_judgement, "spell_pal_judgement_of_justice", SPELL_PALADIN_JUDGEMENT_OF_JUSTICE);
     RegisterSpellScriptWithArgs(spell_pal_judgement, "spell_pal_judgement_of_light", SPELL_PALADIN_JUDGEMENT_OF_LIGHT);
     RegisterSpellScriptWithArgs(spell_pal_judgement, "spell_pal_judgement_of_wisdom", SPELL_PALADIN_JUDGEMENT_OF_WISDOM);
+    RegisterSpellScript(spell_pal_judgement_damage);
     RegisterSpellScript(spell_pal_judgement_of_command);
     RegisterSpellScript(spell_pal_lay_on_hands);
     RegisterSpellScript(spell_pal_righteous_defense);

@@ -3543,6 +3543,22 @@ DungeonFinder.AllowCompleted = 1
 DungeonFinder.DungeonSelectionCooldown = 0
 
 #
+#    DungeonFinder.SkipTeleport
+#
+#        Description: When enabled, the Dungeon Finder no longer teleports the group into the
+#                     dungeon once a proposal is accepted. The LFG group is still formed as
+#                     usual; every member (players and player bots) must travel to the dungeon
+#                     entrance on foot and walk through the portal. Leaving the dungeon returns
+#                     the player to the entrance the same way a non-LFG run does (just outside
+#                     the portal) instead of the LFG join position.
+#                     Player bot travel behaviour is additionally governed by
+#                     AiPlayerbot.LfgWalkToDungeon in the playerbots module config.
+#        Default:     0 - (Blizzlike: teleport the group into the dungeon)
+#                     1 - (No teleport: walk to the dungeon)
+
+DungeonFinder.SkipTeleport = 0
+
+#
 ###################################################################################################
 
 ###################################################################################################

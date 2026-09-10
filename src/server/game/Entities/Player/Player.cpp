@@ -1656,6 +1656,16 @@ bool Player::TeleportToEntryPoint()
 
     if (loc.m_mapId == MAPID_INVALID)
     {
+        // No entry position was recorded. With DungeonFinder.SkipTeleport the LFG teleport-in
+        // (and its SetEntryPoint call) is intentionally skipped, so fall back to the dungeon's
+        // outside-the-portal location: a Dungeon Finder run then exits exactly like a normal
+        // walk-in run instead of dumping the player at their home bind.
+        if (sWorld->getBoolConfig(CONFIG_LFG_SKIP_TELEPORT) && GetMap() && GetMap()->IsDungeon())
+        {
+            if (AreaTriggerTeleport const* at = sObjectMgr->GetGoBackTrigger(GetMapId()))
+                return TeleportTo(at->target_mapId, at->target_X, at->target_Y, at->target_Z, at->target_Orientation);
+        }
+
         return TeleportTo(m_homebindMapId, m_homebindX, m_homebindY, m_homebindZ, GetOrientation());
     }
 

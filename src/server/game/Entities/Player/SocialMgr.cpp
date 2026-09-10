@@ -221,8 +221,13 @@ void SocialMgr::GetFriendInfo(Player* player, ObjectGuid const& friendGUID, Frie
     friendInfo.Class = 0;
 
     Player* pFriend = ObjectAccessor::FindConnectedPlayer(friendGUID);
-    if (!pFriend || pFriend->GetSession()->IsGMAccount())
+    if (!pFriend)
         return;
+
+    // Upstream also bails out here on WorldSession::IsGMAccount(), which pre-empts the
+    // GM.InWhoList.Level check below and pins every account at gamemaster or above to
+    // "offline" in everyone's friends list, config or not. Left to the configurable
+    // check so the friends list agrees with what /who shows.
 
     TeamId teamId = player->GetTeamId();
     AccountTypes gmLevelInWhoList = AccountTypes(sWorld->getIntConfig(CONFIG_GM_LEVEL_IN_WHO_LIST));
