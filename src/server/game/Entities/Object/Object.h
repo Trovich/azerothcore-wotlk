@@ -679,7 +679,12 @@ public:
     VisibilityDistanceType GetVisibilityOverrideType() const { return _visibilityDistanceOverrideType; }
     bool IsVisibilityOverridden() const { return _visibilityDistanceOverrideType > VisibilityDistanceType::Normal; }
     bool IsZoneWideVisible() const { return _visibilityDistanceOverrideType == VisibilityDistanceType::Infinite; }
-    bool IsFarVisible() const { return _visibilityDistanceOverrideType == VisibilityDistanceType::Large || _visibilityDistanceOverrideType == VisibilityDistanceType::Gigantic; }
+    bool IsFarVisible() const
+    {
+        return _visibilityDistanceOverrideType == VisibilityDistanceType::Large
+            || _visibilityDistanceOverrideType == VisibilityDistanceType::Gigantic
+            || _visibilityDistanceOverrideType == VisibilityDistanceType::MinimapTracked;
+    }
     float GetVisibilityOverrideDistance() const;
     void SetVisibilityDistanceOverride(VisibilityDistanceType type);
 

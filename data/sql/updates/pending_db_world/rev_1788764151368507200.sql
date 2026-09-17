@@ -55,6 +55,20 @@
 -- in front of her house, they speak the seven lines that were already in
 -- creature_text but wired to nothing, and both fade away.
 --
+-- Raid warnings (CHAT_MSG_RAID_BOSS_EMOTE) only travel ListenRange.TextEmote,
+-- 40 yd on this server. Joseph stands in the town square 59 yd from where Redpath
+-- the Corrupted falls, Captain Redpath announces himself from that square, and
+-- Davil's opening warning goes out 52 yd from the Relic Bundle, so none of them
+-- reached the player. Every point of the event (square, battle line, Scourge
+-- spawns, Pamela's house) lies in area 2262 "Darrowshire", so all of the event's
+-- announcer lines use TEXT_RANGE_AREA, which reaches exactly that area.
+--
+-- The Scourge side is raid-sized: every wave row summons a pack around its old
+-- spawn point through SMART_TARGET_RANDOM_POINT (5 yd, ground-snapped) - four
+-- Marauding Skeletons or Corpses, three of the elite Servants of Horgus and
+-- Bloodletters - instead of one creature. Rows, points and pacing are unchanged;
+-- Horgus, Marduk, Redpath the Corrupted and the Betrayers stay single.
+--
 -- Carlin Redpath gets the "I need another Relic Bundle!" gossip so a failed run
 -- of the battle no longer forces the player to abandon and re-take the quest.
 --
@@ -68,6 +82,24 @@
 --     for everything alive. Swapped to SMART_EVENT_FRIENDLY_HEALTH_PCT with a
 --     SMART_TARGET_CREATURE_RANGE target, which runs a real IsFriendlyTo() test
 --     (false for factions 14 and 974) and never looks at players at all.
+--   * Davil now kneels for his last words. Emote 68 STATE_KNEEL cannot do that:
+--     in Emotes.dbc it has AnimID 0 and EmoteSpecProc 1 with param 8, i.e. it is
+--     only the /kneel slash command that the server turns into stand state 8.
+--     Written into UNIT_NPC_EMOTESTATE it plays nothing, which is why the first
+--     two attempts showed no kneel at all. Kneeling NPCs in this DB use
+--     UNIT_FIELD_BYTES_1 stand state 8 (565 creature_addon rows, 143 SmartAI
+--     rows), so the scene now uses SMART_ACTION_SET_UNIT_FIELD_BYTES_1 8. Before
+--     that his fight is ended outright (passive, auto attack off, evade disabled
+--     so the combat exit does not walk him home, combat stop) and he is rooted,
+--     so nothing stands him back up; his re-engage is phased off, then he speaks
+--     and dies. He is
+--     flagged untouchable for those thirteen seconds so a stray ghoul cannot cut
+--     the scene short - the one judgement call here without sniff backing, same
+--     as the flags on Marduk.
+--   * The friendly line is half what it was (15 summons -> 8 in stage 1, 7 -> 4
+--     in stage 2). The defenders were holding Darrowshire on their own and the
+--     player had nothing to do; the Scourge waves are unchanged, so the line now
+--     gives way without help.
 --   * Redpath kept his out-of-combat re-engage through the corruption and ran
 --     off seconds after Marduk arrived, so he died far away from him. He is now
 --     phased out of the re-engage, stopped and rooted before Marduk is summoned
@@ -84,22 +116,27 @@
 -- Announcer / narrator lines that had no creature_text row yet.
 DELETE FROM `creature_text` WHERE `CreatureID` = 10944 AND `GroupID` IN (4, 5, 6);
 INSERT INTO `creature_text` (`CreatureID`, `GroupID`, `ID`, `Text`, `Type`, `Language`, `Probability`, `Emote`, `Duration`, `Sound`, `BroadcastTextId`, `TextRange`, `comment`) VALUES
-(10944, 4, 0, 'Help Joseph Carlin\'s troops defend Darrowshire!', 41, 0, 100, 0, 0, 0, 45680, 0, 'Davil Lightfire - battle begins'),
-(10944, 5, 0, 'Protect Davil Lightfire!', 41, 0, 100, 0, 0, 0, 45681, 0, 'Davil Lightfire - joins the line'),
-(10944, 6, 0, 'Davil Lightfire is defeated!  Darrowshire is lost!', 41, 0, 100, 0, 0, 0, 7366, 0, 'Davil Lightfire - event failed');
+(10944, 4, 0, 'Help Joseph Carlin\'s troops defend Darrowshire!', 41, 0, 100, 0, 0, 0, 45680, 1, 'Davil Lightfire - battle begins'),
+(10944, 5, 0, 'Protect Davil Lightfire!', 41, 0, 100, 0, 0, 0, 45681, 1, 'Davil Lightfire - joins the line'),
+(10944, 6, 0, 'Davil Lightfire is defeated!  Darrowshire is lost!', 41, 0, 100, 0, 0, 0, 7366, 1, 'Davil Lightfire - event failed');
 
 DELETE FROM `creature_text` WHERE `CreatureID` = 10946 AND `GroupID` = 1;
 INSERT INTO `creature_text` (`CreatureID`, `GroupID`, `ID`, `Text`, `Type`, `Language`, `Probability`, `Emote`, `Duration`, `Sound`, `BroadcastTextId`, `TextRange`, `comment`) VALUES
-(10946, 1, 0, 'Horgus the Ravager has appeared!  Kill him quickly!', 41, 0, 100, 0, 0, 0, 45682, 0, 'Horgus the Ravager - arrival');
+(10946, 1, 0, 'Horgus the Ravager has appeared!  Kill him quickly!', 41, 0, 100, 0, 0, 0, 45682, 1, 'Horgus the Ravager - arrival');
 
 DELETE FROM `creature_text` WHERE `CreatureID` = 10936 AND `GroupID` IN (3, 4, 5);
 INSERT INTO `creature_text` (`CreatureID`, `GroupID`, `ID`, `Text`, `Type`, `Language`, `Probability`, `Emote`, `Duration`, `Sound`, `BroadcastTextId`, `TextRange`, `comment`) VALUES
 (10936, 3, 0, 'The Nightmare is finally over!  Darrowshire, forgive me!', 12, 0, 100, 0, 0, 0, 7396, 0, 'Joseph Redpath - spirit freed'),
-(10936, 4, 0, 'Speak with Joseph Redpath in the center of Darrowshire.', 41, 0, 100, 0, 0, 0, 45685, 0, 'Joseph Redpath - points the player at the town square'),
+(10936, 4, 0, 'Speak with Joseph Redpath in the center of Darrowshire.', 41, 0, 100, 0, 0, 0, 45685, 1, 'Joseph Redpath - points the player at the town square'),
 (10936, 5, 0, 'Hahah!', 12, 0, 100, 0, 0, 0, 7398, 0, 'Joseph Redpath - reunion with Pamela');
 
 -- Marduk the Black only ever had a text line; he needs an AI to use it.
 UPDATE `creature_template` SET `AIName` = 'SmartAI' WHERE `entry` = 10939;
+
+-- Raid warnings of this event go to the whole Darrowshire area, see the header.
+UPDATE `creature_text` SET `TextRange` = 1 WHERE `CreatureID` = 10937 AND `GroupID` = 1;
+UPDATE `creature_text` SET `TextRange` = 1 WHERE `CreatureID` = 10938 AND `GroupID` = 1;
+UPDATE `creature_text` SET `TextRange` = 1 WHERE `CreatureID` = 10944 AND `GroupID` = 3;
 
 -- Relic Bundle (the GO the quest item drops) - starts the event.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 177526 AND `source_type` = 1;
@@ -116,73 +153,80 @@ INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_
 (10944,0,4,0,0,0,100,0,8000,11000,15000,20000,0,0,11,13005,0,0,0,0,0,5,0,0,0,0,0,0,0,0,'Davil Lightfire - In Combat - Cast Hammer of Justice'),
 (10944,0,5,0,38,0,100,512,1,2,0,0,0,0,80,1094401,2,1,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - On Data Set 1 2 - Run Script (Horgus slain)'),
 (10944,0,6,0,6,1,100,512,0,0,0,0,0,0,1,6,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - On Death (Phase 1) - Announce Defeat'),
-(10944,0,7,0,1,0,100,256,82000,82000,4000,6000,0,0,49,0,0,0,0,0,0,25,40,0,0,0,0,0,0,0,'Davil Lightfire - Out of Combat - Re-engage Nearest Enemy');
+(10944,0,7,0,1,1,100,256,82000,82000,4000,6000,0,0,49,0,0,0,0,0,0,25,40,0,0,0,0,0,0,0,'Davil Lightfire - Out of Combat - Re-engage Nearest Enemy');
 
 -- Davil Lightfire - stage 1 wave script. Horgus arrives at ~3:20.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 1094400 AND `source_type` = 9;
 INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_type`, `event_phase_mask`, `event_chance`, `event_flags`, `event_param1`, `event_param2`, `event_param3`, `event_param4`, `event_param5`, `event_param6`, `action_type`, `action_param1`, `action_param2`, `action_param3`, `action_param4`, `action_param5`, `action_param6`, `target_type`, `target_param1`, `target_param2`, `target_param3`, `target_param4`, `target_x`, `target_y`, `target_z`, `target_o`, `comment`) VALUES
-(1094400,9,0,0,0,0,0,100,0,1000,1000,0,0,0,0,211,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Keep Event Phase Across Resets'),
-(1094400,9,1,0,0,0,0,100,0,500,500,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set Event Phase 1'),
-(1094400,9,2,0,0,0,0,100,0,500,500,0,0,0,0,8,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set React State Defensive'),
-(1094400,9,3,0,0,0,0,100,0,500,500,0,0,0,0,1,4,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Announce Battle'),
-(1094400,9,4,0,0,0,0,100,0,3000,3000,0,0,0,0,1,0,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Say Line 0'),
-(1094400,9,5,0,0,0,0,100,0,2000,2000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1447,-3697,76.8,0.5,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
-(1094400,9,6,0,0,0,0,100,0,500,500,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
-(1094400,9,7,0,0,0,0,100,0,1000,1000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Davil Lightfire - Stage 1 - Summon Redpath Militia'),
-(1094400,9,8,0,0,0,0,100,0,2000,2000,0,0,0,0,45,1,1,0,0,0,0,19,10948,100,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set Data 1 1 (Defender calls to arms)'),
-(1094400,9,9,0,0,0,0,100,0,8000,8000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,10,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,11,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,12,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,13,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,14,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,15,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,16,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,17,0,0,0,0,100,0,11000,11000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,18,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Davil Lightfire - Stage 1 - Summon Silver Hand Disciple'),
-(1094400,9,19,0,0,0,0,100,0,1000,1000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Davil Lightfire - Stage 1 - Summon Silver Hand Disciple'),
-(1094400,9,20,0,0,0,0,100,0,2000,2000,0,0,0,0,1,5,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Announce Davil Joins The Line'),
-(1094400,9,21,0,0,0,0,100,0,1000,1000,0,0,0,0,8,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set React State Aggressive'),
-(1094400,9,22,0,0,0,0,100,0,500,500,0,0,0,0,49,0,0,0,0,0,0,19,10952,40,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Attack Start'),
-(1094400,9,23,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,24,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,25,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,26,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,27,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,28,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,29,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,30,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,31,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,32,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,33,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,34,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,35,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
-(1094400,9,36,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,37,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,38,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,39,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,40,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1504,-3691,81.8,0.4,'Davil Lightfire - Stage 1 - Summon Redpath Militia'),
-(1094400,9,41,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,42,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,43,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus'),
-(1094400,9,44,0,0,0,0,100,0,4000,4000,0,0,0,0,1,1,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Say Line 1'),
-(1094400,9,45,0,0,0,0,100,0,1500,1500,0,0,0,0,12,10946,4,600000,0,0,0,8,0,0,0,0,1507,-3663,84.36,3.9,'Davil Lightfire - Stage 1 - Summon Horgus the Ravager'),
-(1094400,9,46,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,47,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse'),
-(1094400,9,48,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
-(1094400,9,49,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton'),
-(1094400,9,50,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Servant of Horgus');
+(1094400,9,0,0,0,0,100,0,1000,1000,0,0,0,0,211,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Keep Event Phase Across Resets'),
+(1094400,9,1,0,0,0,100,0,500,500,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set Event Phase 1'),
+(1094400,9,2,0,0,0,100,0,500,500,0,0,0,0,8,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set React State Defensive'),
+(1094400,9,3,0,0,0,100,0,500,500,0,0,0,0,1,4,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Announce Battle'),
+(1094400,9,4,0,0,0,100,0,3000,3000,0,0,0,0,1,0,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Say Line 0'),
+(1094400,9,5,0,0,0,100,0,2000,2000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1447,-3697,76.8,0.5,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
+(1094400,9,6,0,0,0,100,0,500,500,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
+(1094400,9,7,0,0,0,100,0,1000,1000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Davil Lightfire - Stage 1 - Summon Redpath Militia'),
+(1094400,9,8,0,0,0,100,0,2000,2000,0,0,0,0,45,1,1,0,0,0,0,19,10948,100,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set Data 1 1 (Defender calls to arms)'),
+(1094400,9,9,0,0,0,100,0,8000,8000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,10,0,0,0,100,0,4000,4000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,11,0,0,0,100,0,4000,4000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,12,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,13,0,0,0,100,0,6000,6000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,14,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,15,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,16,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,17,0,0,0,100,0,11000,11000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,18,0,0,0,100,0,4000,4000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Davil Lightfire - Stage 1 - Summon Silver Hand Disciple'),
+(1094400,9,19,0,0,0,100,0,1000,1000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Davil Lightfire - Stage 1 - Summon Silver Hand Disciple'),
+(1094400,9,20,0,0,0,100,0,2000,2000,0,0,0,0,1,5,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Announce Davil Joins The Line'),
+(1094400,9,21,0,0,0,100,0,1000,1000,0,0,0,0,8,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Set React State Aggressive'),
+(1094400,9,22,0,0,0,100,0,500,500,0,0,0,0,49,0,0,0,0,0,0,19,10952,40,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Attack Start'),
+(1094400,9,23,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,24,0,0,0,100,0,4000,4000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,25,0,0,0,100,0,4000,4000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,26,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,27,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,28,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,29,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,30,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,31,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,32,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,33,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,34,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,35,0,0,0,100,0,5000,5000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
+(1094400,9,36,0,0,0,100,0,5000,5000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,37,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,38,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,39,0,0,0,100,0,6000,6000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,40,0,0,0,100,0,6000,6000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1504,-3691,81.8,0.4,'Davil Lightfire - Stage 1 - Summon Redpath Militia'),
+(1094400,9,41,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,42,0,0,0,100,0,6000,6000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,43,0,0,0,100,0,6000,6000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1515,-3663,86.42,3.6,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)'),
+(1094400,9,44,0,0,0,100,0,4000,4000,0,0,0,0,1,1,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 - Say Line 1'),
+(1094400,9,45,0,0,0,100,0,1500,1500,0,0,0,0,12,10946,4,600000,0,0,0,8,0,0,0,0,1507,-3663,84.36,3.9,'Davil Lightfire - Stage 1 - Summon Horgus the Ravager'),
+(1094400,9,46,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,47,0,0,0,100,0,10000,10000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Davil Lightfire - Stage 1 - Summon Marauding Corpse (pack of 4)'),
+(1094400,9,48,0,0,0,100,0,10000,10000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Davil Lightfire - Stage 1 - Summon Darrowshire Defender'),
+(1094400,9,49,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Davil Lightfire - Stage 1 - Summon Marauding Skeleton (pack of 4)'),
+(1094400,9,50,0,0,0,100,0,10000,10000,0,0,0,0,12,10953,4,300000,0,0,0,202,5,3,0,0,1513,-3686,84.22,2.9,'Davil Lightfire - Stage 1 - Summon Servant of Horgus (pack of 3)');
 
 -- Davil Lightfire - Horgus is dead: hand the battle over to Captain Redpath.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 1094401 AND `source_type` = 9;
 INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_type`, `event_phase_mask`, `event_chance`, `event_flags`, `event_param1`, `event_param2`, `event_param3`, `event_param4`, `event_param5`, `event_param6`, `action_type`, `action_param1`, `action_param2`, `action_param3`, `action_param4`, `action_param5`, `action_param6`, `target_type`, `target_param1`, `target_param2`, `target_param3`, `target_param4`, `target_x`, `target_y`, `target_z`, `target_o`, `comment`) VALUES
 (1094401,9,0,0,0,0,100,0,0,0,0,0,0,0,212,1,1,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Stop Motion'),
-(1094401,9,1,0,0,0,100,0,200,200,0,0,0,0,101,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Home Pos'),
-(1094401,9,2,0,0,0,100,0,300,300,0,0,0,0,22,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Event Phase 2'),
-(1094401,9,3,0,0,0,100,0,500,500,0,0,0,0,12,10937,4,900000,0,0,0,8,0,0,0,0,1443.25,-3702.94,77.38,0.5,'Davil Lightfire - Stage 1 End - Summon Captain Redpath'),
-(1094401,9,4,0,0,0,100,0,1000,1000,0,0,0,0,1,2,5000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Say Line 2'),
-(1094401,9,5,0,0,0,100,0,6000,6000,0,0,0,0,1,3,3000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Announce Davil Falls'),
-(1094401,9,6,0,0,0,100,0,3000,3000,0,0,0,0,37,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Die');
+(1094401,9,1,0,0,0,100,0,100,100,0,0,0,0,22,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Event Phase 2'),
+(1094401,9,2,0,0,0,100,0,100,100,0,0,0,0,18,770,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Unit Flags'),
+(1094401,9,3,0,0,0,100,0,100,100,0,0,0,0,8,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set React State Passive'),
+(1094401,9,4,0,0,0,100,0,100,100,0,0,0,0,20,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Stop Auto Attack'),
+(1094401,9,5,0,0,0,100,0,100,100,0,0,0,0,117,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Disable Evade'),
+(1094401,9,6,0,0,0,100,0,100,100,0,0,0,0,27,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Combat Stop'),
+(1094401,9,7,0,0,0,100,0,100,100,0,0,0,0,101,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Home Pos'),
+(1094401,9,8,0,0,0,100,0,100,100,0,0,0,0,103,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Root'),
+(1094401,9,9,0,0,0,100,0,300,300,0,0,0,0,90,8,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Set Stand State Kneel'),
+(1094401,9,10,0,0,0,100,0,2500,2500,0,0,0,0,12,10937,4,900000,0,0,0,8,0,0,0,0,1443.25,-3702.94,77.38,0.5,'Davil Lightfire - Stage 1 End - Summon Captain Redpath'),
+(1094401,9,11,0,0,0,100,0,500,500,0,0,0,0,1,2,5000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Say Line 2'),
+(1094401,9,12,0,0,0,100,0,6000,6000,0,0,0,0,1,3,3000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Announce Davil Falls'),
+(1094401,9,13,0,0,0,100,0,3000,3000,0,0,0,0,37,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Davil Lightfire - Stage 1 End - Die');
 
 -- Horgus the Ravager - stage 1 boss.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 10946 AND `source_type` = 0;
@@ -213,55 +257,55 @@ INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_
 -- Captain Redpath - stage 2 wave script, ends with Marduk the Black.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 1093700 AND `source_type` = 9;
 INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_type`, `event_phase_mask`, `event_chance`, `event_flags`, `event_param1`, `event_param2`, `event_param3`, `event_param4`, `event_param5`, `event_param6`, `action_type`, `action_param1`, `action_param2`, `action_param3`, `action_param4`, `action_param5`, `action_param6`, `target_type`, `target_param1`, `target_param2`, `target_param3`, `target_param4`, `target_x`, `target_y`, `target_z`, `target_o`, `comment`) VALUES
-(1093700,9,0,0,0,0,0,100,0,500,500,0,0,0,0,211,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Keep Event Phase Across Resets'),
-(1093700,9,1,0,0,0,0,100,0,500,500,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set Event Phase 1'),
-(1093700,9,2,0,0,0,0,100,0,500,500,0,0,0,0,8,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set React State Passive'),
-(1093700,9,3,0,0,0,0,100,0,500,500,0,0,0,0,59,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set Run On'),
-(1093700,9,4,0,0,0,0,100,0,500,500,0,0,0,0,11,41232,2,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Cast Teleport Visual'),
-(1093700,9,5,0,0,0,0,100,0,6000,6000,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Announce Arrival'),
-(1093700,9,6,0,0,0,0,100,0,1500,1500,0,0,0,0,1,0,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Say Line 0'),
-(1093700,9,7,0,0,0,0,100,0,1500,1500,0,0,0,0,69,0,0,0,0,0,0,8,0,0,0,0,1495.81,-3675.28,81.03,0.6,'Captain Redpath - Stage 2 - Move To Battle Line'),
-(1093700,9,8,0,0,0,0,100,0,13000,13000,0,0,0,0,69,0,0,0,0,0,0,8,0,0,0,0,1495.81,-3675.28,81.03,0.6,'Captain Redpath - Stage 2 - Move To Battle Line (retry)'),
-(1093700,9,9,0,0,0,0,100,0,3000,3000,0,0,0,0,8,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set React State Aggressive'),
-(1093700,9,10,0,0,0,0,100,0,500,500,0,0,0,0,49,0,0,0,0,0,0,19,10952,60,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Attack Start'),
-(1093700,9,11,0,0,0,0,100,0,4000,4000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Captain Redpath - Stage 2 - Summon Darrowshire Defender'),
-(1093700,9,12,0,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,13,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,14,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,15,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,16,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,17,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,18,0,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,19,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,20,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,21,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,22,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Captain Redpath - Stage 2 - Summon Silver Hand Disciple'),
-(1093700,9,23,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,24,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,25,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,26,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,27,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Captain Redpath - Stage 2 - Summon Darrowshire Defender'),
-(1093700,9,28,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,29,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,30,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,31,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,32,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1504,-3691,81.8,0.4,'Captain Redpath - Stage 2 - Summon Redpath Militia'),
-(1093700,9,33,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,34,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,8,0,0,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter'),
-(1093700,9,35,0,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,8,0,0,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton'),
-(1093700,9,36,0,0,0,0,100,0,8000,8000,0,0,0,0,12,10951,4,300000,0,0,0,8,0,0,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Corpse'),
-(1093700,9,37,0,0,0,0,100,0,8000,8000,0,0,0,0,22,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Event Phase 2'),
-(1093700,9,38,0,0,0,0,100,0,200,200,0,0,0,0,8,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set React State Passive'),
-(1093700,9,39,0,0,0,0,100,0,200,200,0,0,0,0,224,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Attack Stop'),
-(1093700,9,40,0,0,0,0,100,0,200,200,0,0,0,0,101,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Home Pos'),
-(1093700,9,41,0,0,0,0,100,0,200,200,0,0,0,0,103,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Root'),
-(1093700,9,42,0,0,0,0,100,0,700,700,0,0,0,0,12,10939,4,60000,0,0,0,1,0,0,0,0,2,2,0,0,'Captain Redpath - Corruption - Summon Marduk the Black'),
-(1093700,9,43,0,0,0,0,100,0,7000,7000,0,0,0,0,45,1,3,0,0,0,0,19,10948,150,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Data 1 3 (Defender announces)'),
-(1093700,9,44,0,0,0,0,100,0,200,200,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
-(1093700,9,45,0,0,0,0,100,0,100,100,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
-(1093700,9,46,0,0,0,0,100,0,100,100,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
-(1093700,9,47,0,0,0,0,100,0,300,300,0,0,0,0,12,10938,4,900000,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Summon Redpath the Corrupted'),
-(1093700,9,48,0,0,0,0,100,0,100,100,0,0,0,0,37,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Die');
+(1093700,9,0,0,0,0,100,0,500,500,0,0,0,0,211,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Keep Event Phase Across Resets'),
+(1093700,9,1,0,0,0,100,0,500,500,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set Event Phase 1'),
+(1093700,9,2,0,0,0,100,0,500,500,0,0,0,0,8,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set React State Passive'),
+(1093700,9,3,0,0,0,100,0,500,500,0,0,0,0,59,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set Run On'),
+(1093700,9,4,0,0,0,100,0,500,500,0,0,0,0,11,41232,2,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Cast Teleport Visual'),
+(1093700,9,5,0,0,0,100,0,6000,6000,0,0,0,0,1,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Announce Arrival'),
+(1093700,9,6,0,0,0,100,0,1500,1500,0,0,0,0,1,0,4000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Say Line 0'),
+(1093700,9,7,0,0,0,100,0,1500,1500,0,0,0,0,69,0,0,0,0,0,0,8,0,0,0,0,1495.81,-3675.28,81.03,0.6,'Captain Redpath - Stage 2 - Move To Battle Line'),
+(1093700,9,8,0,0,0,100,0,13000,13000,0,0,0,0,69,0,0,0,0,0,0,8,0,0,0,0,1495.81,-3675.28,81.03,0.6,'Captain Redpath - Stage 2 - Move To Battle Line (retry)'),
+(1093700,9,9,0,0,0,100,0,3000,3000,0,0,0,0,8,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Set React State Aggressive'),
+(1093700,9,10,0,0,0,100,0,500,500,0,0,0,0,49,0,0,0,0,0,0,19,10952,60,0,0,0,0,0,0,'Captain Redpath - Stage 2 - Attack Start'),
+(1093700,9,11,0,0,0,100,0,4000,4000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Captain Redpath - Stage 2 - Summon Darrowshire Defender'),
+(1093700,9,12,0,0,0,100,0,6000,6000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,13,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,14,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,15,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,16,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,17,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,18,0,0,0,100,0,10000,10000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,19,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,20,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,21,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,22,0,0,0,100,0,5000,5000,0,0,0,0,12,10949,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Captain Redpath - Stage 2 - Summon Silver Hand Disciple'),
+(1093700,9,23,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,24,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,25,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,26,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,27,0,0,0,100,0,5000,5000,0,0,0,0,12,10948,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Captain Redpath - Stage 2 - Summon Darrowshire Defender'),
+(1093700,9,28,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,29,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1520.7,-3680.1,83.88,2.6,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,30,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1537,-3680,88.4,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,31,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1514,-3686,84.64,3.2,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,32,0,0,0,100,0,5000,5000,0,0,0,0,12,10950,4,300000,0,0,0,8,0,0,0,0,1504,-3691,81.8,0.4,'Captain Redpath - Stage 2 - Summon Redpath Militia'),
+(1093700,9,33,0,0,0,100,0,5000,5000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1510,-3661,85.7,3.4,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,34,0,0,0,100,0,5000,5000,0,0,0,0,12,10954,4,300000,0,0,0,202,5,3,0,0,1536.5,-3684,88.1,2.9,'Captain Redpath - Stage 2 - Summon Bloodletter (pack of 3)'),
+(1093700,9,35,0,0,0,100,0,5000,5000,0,0,0,0,12,10952,4,300000,0,0,0,202,5,4,0,0,1515,-3663,86.42,3.6,'Captain Redpath - Stage 2 - Summon Marauding Skeleton (pack of 4)'),
+(1093700,9,36,0,0,0,100,0,8000,8000,0,0,0,0,12,10951,4,300000,0,0,0,202,5,4,0,0,1513,-3686,84.22,2.9,'Captain Redpath - Stage 2 - Summon Marauding Corpse (pack of 4)'),
+(1093700,9,37,0,0,0,100,0,8000,8000,0,0,0,0,22,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Event Phase 2'),
+(1093700,9,38,0,0,0,100,0,200,200,0,0,0,0,8,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set React State Passive'),
+(1093700,9,39,0,0,0,100,0,200,200,0,0,0,0,224,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Attack Stop'),
+(1093700,9,40,0,0,0,100,0,200,200,0,0,0,0,101,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Home Pos'),
+(1093700,9,41,0,0,0,100,0,200,200,0,0,0,0,103,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Root'),
+(1093700,9,42,0,0,0,100,0,700,700,0,0,0,0,12,10939,4,60000,0,0,0,1,0,0,0,0,2,2,0,0,'Captain Redpath - Corruption - Summon Marduk the Black'),
+(1093700,9,43,0,0,0,100,0,7000,7000,0,0,0,0,45,1,3,0,0,0,0,19,10948,150,0,0,0,0,0,0,'Captain Redpath - Corruption - Set Data 1 3 (Defender announces)'),
+(1093700,9,44,0,0,0,100,0,200,200,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1490,-3667,81.27,0.4,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
+(1093700,9,45,0,0,0,100,0,100,100,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1495,-3669,81.44,0.4,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
+(1093700,9,46,0,0,0,100,0,100,100,0,0,0,0,12,10947,4,300000,0,0,0,8,0,0,0,0,1499,-3686,81.2,0.1,'Captain Redpath - Corruption - Summon Darrowshire Betrayer'),
+(1093700,9,47,0,0,0,100,0,300,300,0,0,0,0,12,10938,4,900000,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Summon Redpath the Corrupted'),
+(1093700,9,48,0,0,0,100,0,100,100,0,0,0,0,37,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Captain Redpath - Corruption - Die');
 
 -- Marduk the Black - cinematic appearance that ends Captain Redpath.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 10939 AND `source_type` = 0;
@@ -291,28 +335,32 @@ INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_
 (10938,0,9,0,4,0,100,1,0,0,0,0,0,0,101,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Redpath the Corrupted - On Aggro - Set Home Pos'),
 (10938,0,10,11,6,0,100,512,0,0,0,0,0,0,45,1,4,0,0,0,0,19,10948,150,0,0,0,0,0,0,'Redpath the Corrupted - On Death - Set Data 1 4 (Defender announces)'),
 (10938,0,11,12,61,0,100,512,0,0,0,0,0,0,12,10936,4,300000,0,0,0,8,0,0,0,0,1443.25,-3702.94,77.38,0.5,'Redpath the Corrupted - On Death - Summon Joseph Redpath'),
-(10938,0,12,13,61,0,100,512,0,0,0,0,0,0,45,1,1,0,0,0,0,19,10936,150,0,0,0,0,0,0,'Redpath the Corrupted - On Death - Set Data 1 1 (Joseph at the town square)'),
-(10938,0,13,0,61,0,100,512,0,0,0,0,0,0,12,10945,4,300000,0,0,0,8,0,0,0,0,1459,-3678,77.9,5.9,'Redpath the Corrupted - On Death - Summon Davil Crokford'),
-(10938,0,14,0,1,0,100,256,8000,8000,4000,6000,0,0,49,0,0,0,0,0,0,25,60,0,0,0,0,0,0,0,'Redpath the Corrupted - Out of Combat - Re-engage Nearest Enemy');
+(10938,0,12,0,61,0,100,512,0,0,0,0,0,0,12,10945,4,300000,0,0,0,8,0,0,0,0,1459,-3678,77.9,5.9,'Redpath the Corrupted - On Death - Summon Davil Crokford'),
+(10938,0,13,0,1,0,100,256,8000,8000,4000,6000,0,0,49,0,0,0,0,0,0,25,60,0,0,0,0,0,0,0,'Redpath the Corrupted - Out of Combat - Re-engage Nearest Enemy');
 
--- Joseph Redpath - the freed spirit. The same entry plays two scenes, so the
--- town-square appearance is keyed off data 1 1 (set by Redpath the Corrupted)
--- and the reunion at Pamela's house off data 1 2 (set by Pamela). Without a
--- key he just stands there quietly, which is what the reunion needs - his
--- lines there are spoken through him from Pamela's script.
+-- Joseph Redpath - the freed spirit. The same entry plays two scenes. The
+-- town-square one is his default: he enters phase 1 200 ms after spawning, and
+-- the phase-1 rows give the spawn-in, his line and, 12 s after Redpath the
+-- Corrupted falls, the raid warning to come and speak with him. Pamela's reunion
+-- sets data 1 2 at 500 ms, which moves him to phase 2 before any of those rows
+-- is due, so he stays silent there and his lines come from Pamela's script.
+-- Phase-masked timers do not count down outside their phase, which is why the
+-- phase-1 timers are 200 ms shorter than the moment they fire.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 10936 AND `source_type` = 0;
 INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_type`, `event_phase_mask`, `event_chance`, `event_flags`, `event_param1`, `event_param2`, `event_param3`, `event_param4`, `event_param5`, `event_param6`, `action_type`, `action_param1`, `action_param2`, `action_param3`, `action_param4`, `action_param5`, `action_param6`, `target_type`, `target_param1`, `target_param2`, `target_param3`, `target_param4`, `target_x`, `target_y`, `target_z`, `target_o`, `comment`) VALUES
-(10936,0,0,1,38,0,100,512,1,1,0,0,0,0,11,17321,2,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 1 - Cast Spirit Spawn-In'),
-(10936,0,1,2,61,0,100,512,0,0,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 1 - Set Event Phase 1'),
-(10936,0,2,0,61,0,100,512,0,0,0,0,0,0,1,3,6000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 1 - Say Line 3'),
-(10936,0,3,0,60,1,100,1,10000,10000,0,0,0,0,1,4,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 1) - Announce Speak With Joseph Redpath'),
-(10936,0,4,0,38,0,100,512,1,2,0,0,0,0,83,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 2 - Remove Gossip Flag'),
-(10936,0,5,0,38,0,100,512,1,3,0,0,0,0,41,2000,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 3 - Despawn'),
-(10936,0,6,7,64,0,100,512,0,0,0,0,0,0,33,10936,0,0,0,0,0,7,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Kill Credit'),
-(10936,0,7,8,61,0,100,512,0,0,0,0,0,0,22,3,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Set Phase 3'),
-(10936,0,8,9,61,0,100,512,0,0,0,0,0,0,41,10000,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Despawn'),
-(10936,0,9,0,61,0,100,512,0,0,0,0,0,0,41,10000,0,0,0,0,0,11,10945,100,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Despawn Davil Crokford'),
-(10936,0,10,0,60,4,100,0,2000,2000,6000,6000,0,0,5,20,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 3) - Play Emote');
+(10936,0,0,1,60,0,100,1,200,200,0,0,0,0,211,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update - Keep Event Phase Across Resets'),
+(10936,0,1,0,61,0,100,512,0,0,0,0,0,0,22,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update - Set Event Phase 1'),
+(10936,0,2,3,60,1,100,1,800,800,0,0,0,0,11,17321,2,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 1) - Cast Spirit Spawn-In'),
+(10936,0,3,0,61,0,100,512,0,0,0,0,0,0,1,3,6000,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 1) - Say Line 3'),
+(10936,0,4,0,60,1,100,1,11800,11800,0,0,0,0,1,4,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 1) - Announce Speak With Joseph Redpath'),
+(10936,0,5,6,38,0,100,512,1,2,0,0,0,0,22,2,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 2 - Set Event Phase 2'),
+(10936,0,6,0,61,0,100,512,0,0,0,0,0,0,83,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 2 - Remove Gossip Flag'),
+(10936,0,7,0,38,0,100,512,1,3,0,0,0,0,41,2000,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Data Set 1 3 - Despawn'),
+(10936,0,8,9,64,0,100,512,0,0,0,0,0,0,33,10936,0,0,0,0,0,7,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Kill Credit'),
+(10936,0,9,10,61,0,100,512,0,0,0,0,0,0,22,3,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Set Phase 3'),
+(10936,0,10,11,61,0,100,512,0,0,0,0,0,0,41,10000,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Despawn'),
+(10936,0,11,0,61,0,100,512,0,0,0,0,0,0,41,10000,0,0,0,0,0,11,10945,100,0,0,0,0,0,0,'Joseph Redpath - On Gossip Hello - Despawn Davil Crokford'),
+(10936,0,12,0,60,4,100,0,2000,2000,6000,6000,0,0,5,20,0,0,0,0,0,1,0,0,0,0,0,0,0,0,'Joseph Redpath - On Update (Phase 3) - Play Emote');
 
 -- Darrowshire Defender - the battle announcer and the final cleanup.
 DELETE FROM `smart_scripts` WHERE `entryorguid` = 10948 AND `source_type` = 0;

@@ -42,6 +42,7 @@ private:
     void LaunchMovement(Creature* owner, Unit* target);
 
     static constexpr uint32 FORMATION_MOVEMENT_INTERVAL = 1200;
+    static constexpr float FORMATION_CATCH_UP_DISTANCE = 20.0f;
 
     float const _range;
     float _angle;

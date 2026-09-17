@@ -34,6 +34,7 @@
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
 #include "SmartAI.h"
+#include "Spell.h"
 #include "SpellMgr.h"
 #include "Vehicle.h"
 #include "WorldState.h"
@@ -82,6 +83,8 @@ SmartScript::SmartScript()
     mCurrentPriority = 0;
     mEventSortingRequired = false;
     _allowPhaseReset = true;
+    _rangeBandCombatMovement = false;
+    _combatMoveForLineOfSight = false;
 }
 
 SmartScript::~SmartScript()
@@ -133,6 +136,8 @@ void SmartScript::OnReset()
     // xinef: check if we allow phase reset
     if (AllowPhaseReset())
         SetPhase(0);
+
+    _combatMoveForLineOfSight = false;
 
     ResetBaseObject();
     for (SmartAIEventList::iterator i = mEvents.begin(); i != mEvents.end(); ++i)
@@ -704,7 +709,7 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                     float spellMinRange = me->GetSpellMinRangeForTarget(target->ToUnit(), spellInfo);
                     float meleeRange = me->GetMeleeRange(target->ToUnit());
 
-                    bool isWithinLOSInMap = me->IsWithinLOSInMap(target->ToUnit(), VMAP::ModelIgnoreFlags::M2);
+                    bool isWithinLOSInMap = me->IsWithinLOSInMap(target->ToUnit(), Spell::GetLineOfSightIgnoreFlags());
                     bool isWithinMeleeRange = distanceToTarget <= meleeRange;
                     bool isRangedAttack = spellMaxRange > NOMINAL_MELEE_RANGE;
                     bool isTargetRooted = target->ToUnit()->HasUnitState(UNIT_STATE_ROOT);
@@ -747,6 +752,13 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                         CAST_AI(SmartAI, me->AI())->SetCurrentRangeMode(true, 0.f);
                         if (e.action.cast.castFlags & SMARTCAST_ENABLE_COMBAT_MOVE_ON_LOS)
                             CAST_AI(SmartAI, me->AI())->SetCombatMovement(true, true);
+                        else if (!(isWithinLOSInMap || isSpellIgnoreLOS) && _rangeBandCombatMovement
+                            && me->HasUnitState(UNIT_STATE_NO_COMBAT_MOVEMENT))
+                        {
+                            // legacy ranged caster locked in place out of sight: go and find the target
+                            _combatMoveForLineOfSight = true;
+                            CAST_AI(SmartAI, me->AI())->SetCombatMovement(true, true);
+                        }
                         continue;
                     }
 
@@ -773,7 +785,16 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                     if (spellCastFailed)
                         failedSpellCast = true;
                     else
+                    {
                         successfulSpellCast = true;
+
+                        // back in sight of the victim: resume standing and casting
+                        if (_combatMoveForLineOfSight && target == me->GetVictim())
+                        {
+                            _combatMoveForLineOfSight = false;
+                            CAST_AI(SmartAI, me->AI())->SetCombatMovement(false, true);
+                        }
+                    }
 
                     LOG_DEBUG("scripts.ai", "SmartScript::ProcessAction:: SMART_ACTION_CAST: Unit {} casts spell {} on target {} with castflags {}",
                               me->GetGUID().ToString(), e.action.cast.spell, target->GetGUID().ToString(), e.action.cast.castFlags);
@@ -1002,6 +1023,15 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                 break;
 
             bool move = e.action.combatMove.move;
+
+            // The legacy ranged-caster template stops moving purely by distance. With the victim
+            // behind a tree or a wall that parks the caster for good: it can neither cast nor walk
+            // round the obstacle. Keep it moving until it can see its target again.
+            if (!move && _rangeBandCombatMovement && me->GetVictim() && !me->HasUnitState(UNIT_STATE_NO_COMBAT_MOVEMENT)
+                && !me->IsWithinLOSInMap(me->GetVictim(), Spell::GetLineOfSightIgnoreFlags()))
+                break;
+
+            _combatMoveForLineOfSight = false;
             CAST_AI(SmartAI, me->AI())->SetCombatMovement(move, true);
             LOG_DEBUG("sql.sql", "SmartScript::ProcessAction:: SMART_ACTION_ALLOW_COMBAT_MOVEMENT: Creature {} bool on = {}",
                            me->GetGUID().ToString(), e.action.combatMove.move);
@@ -5405,6 +5435,12 @@ void SmartScript::OnInitialize(WorldObject* obj, AreaTrigger const* at)
 
     ProcessEventsFor(SMART_EVENT_AI_INIT);
     InstallEvents();
+
+    _rangeBandCombatMovement = std::any_of(mEvents.begin(), mEvents.end(), [](SmartScriptHolder const& event)
+    {
+        return event.GetEventType() == SMART_EVENT_RANGE && event.GetActionType() == SMART_ACTION_ALLOW_COMBAT_MOVEMENT;
+    });
+
     ProcessEventsFor(SMART_EVENT_JUST_CREATED);
 }
 

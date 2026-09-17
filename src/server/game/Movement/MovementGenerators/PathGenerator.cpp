@@ -1186,7 +1186,7 @@ void PathGenerator::ShortenPathUntilDist(G3D::Vector3 const& target, float dist)
         return;
 
     std::size_t i = _pathPoints.size() - 1;
-    float x, y, z, collisionHeight = _source->GetCollisionHeight();
+    float const collisionHeight = _source->GetCollisionHeight();
     // find the first i s.t.:
     //  - _pathPoints[i] is still too close
     //  - _pathPoints[i-1] is too far away
@@ -1200,8 +1200,14 @@ void PathGenerator::ShortenPathUntilDist(G3D::Vector3 const& target, float dist)
         bool canCheckSlope = _slopeCheck && (GetPathType() & ~(PATHFIND_NOT_USING_PATH));
 
         // check if the shortened path is still in LoS with the target and it is walkable
-        _source->GetHitSpherePointFor({ _pathPoints[i - 1].x, _pathPoints[i - 1].y, _pathPoints[i - 1].z + collisionHeight }, x, y, z);
-        if (!_source->GetMap()->isInLineOfSight(x, y, z, _pathPoints[i - 1].x, _pathPoints[i - 1].y, _pathPoints[i - 1].z + collisionHeight,
+        // The sight line has to run from the candidate end point to the target. It used to start
+        // at the source's current hit sphere instead - wherever the mover still is, often 10-20 yd
+        // back - so a single tree or rock between the mover and a point 3 yd short of the target
+        // left the path uncut: melee chasers ran into their victim's centre (braked only by the
+        // 400 ms chase recheck) and charges landed inside the target, mostly in forests and rough
+        // ground (e.g. Timber Worgs in the Terokkar forest).
+        if (!_source->GetMap()->isInLineOfSight(_pathPoints[i - 1].x, _pathPoints[i - 1].y,
+            _pathPoints[i - 1].z + collisionHeight, target.x, target.y, target.z + collisionHeight,
             _source->GetPhaseMask(), LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing) || (canCheckSlope &&
                 !IsSwimmableSegment(_source->GetPositionX(), _source->GetPositionY(), _source->GetPositionZ(), _pathPoints[i - 1].x, _pathPoints[i - 1].y, _pathPoints[i - 1].z) &&
                 !IsWalkableClimb(_source->GetPositionX(), _source->GetPositionY(), _source->GetPositionZ(), _pathPoints[i - 1].x, _pathPoints[i - 1].y, _pathPoints[i - 1].z)))

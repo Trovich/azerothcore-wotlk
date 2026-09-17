@@ -2229,7 +2229,7 @@ void Spell::SearchChainTargets(std::list<WorldObject*>& targets, uint32 chainTar
                 if (Unit* unit = (*itr)->ToUnit())
                 {
                     uint32 deficit = unit->GetMaxHealth() - unit->GetHealth();
-                    if (deficit > maxHPDeficit && chainSource->IsWithinDist(unit, jumpRadius) && chainSource->IsWithinLOSInMap(unit, VMAP::ModelIgnoreFlags::M2))
+                    if (deficit > maxHPDeficit && chainSource->IsWithinDist(unit, jumpRadius) && chainSource->IsWithinLOSInMap(unit, GetLineOfSightIgnoreFlags()))
                     {
                         foundItr = itr;
                         maxHPDeficit = deficit;
@@ -2244,10 +2244,10 @@ void Spell::SearchChainTargets(std::list<WorldObject*>& targets, uint32 chainTar
             {
                 if (foundItr == tempTargets.end())
                 {
-                    if ((!isBouncingFar || chainSource->IsWithinDist(*itr, jumpRadius)) && chainSource->IsWithinLOSInMap(*itr, VMAP::ModelIgnoreFlags::M2))
+                    if ((!isBouncingFar || chainSource->IsWithinDist(*itr, jumpRadius)) && chainSource->IsWithinLOSInMap(*itr, GetLineOfSightIgnoreFlags()))
                         foundItr = itr;
                 }
-                else if (chainSource->GetDistanceOrder(*itr, *foundItr) && chainSource->IsWithinLOSInMap(*itr, VMAP::ModelIgnoreFlags::M2))
+                else if (chainSource->GetDistanceOrder(*itr, *foundItr) && chainSource->IsWithinLOSInMap(*itr, GetLineOfSightIgnoreFlags()))
                     foundItr = itr;
             }
         }
@@ -5949,7 +5949,7 @@ SpellCastResult Spell::CheckCast(bool strict, uint32* /*param1*/, uint32* /*para
                     losChecks &= ~LINEOFSIGHT_CHECK_GOBJECT_M2;
                 }
 
-                if (!m_caster->IsWithinLOSInMap(target, VMAP::ModelIgnoreFlags::M2, LineOfSightChecks(losChecks)))
+                if (!m_caster->IsWithinLOSInMap(target, GetLineOfSightIgnoreFlags(), LineOfSightChecks(losChecks)))
                 {
                     return SPELL_FAILED_LINE_OF_SIGHT;
                 }
@@ -5986,7 +5986,7 @@ SpellCastResult Spell::CheckCast(bool strict, uint32* /*param1*/, uint32* /*para
                 losChecks &= ~LINEOFSIGHT_CHECK_GOBJECT_M2;
             }
 
-            if (!m_caster->IsWithinLOS(x, y, z, VMAP::ModelIgnoreFlags::M2, LineOfSightChecks((losChecks))))
+            if (!m_caster->IsWithinLOS(x, y, z, GetLineOfSightIgnoreFlags(), LineOfSightChecks((losChecks))))
             {
                 return SPELL_FAILED_LINE_OF_SIGHT;
             }
@@ -8016,6 +8016,14 @@ CurrentSpellTypes Spell::GetCurrentContainer() const
         return(CURRENT_GENERIC_SPELL);
 }
 
+VMAP::ModelIgnoreFlags Spell::GetLineOfSightIgnoreFlags()
+{
+    if (sWorld->getBoolConfig(CONFIG_CHECK_M2_LOS_FOR_SPELLS))
+        return VMAP::ModelIgnoreFlags::Nothing;
+
+    return VMAP::ModelIgnoreFlags::M2;
+}
+
 bool Spell::CheckEffectTarget(Unit const* target, uint32 eff) const
 {
     switch (m_spellInfo->Effects[eff].ApplyAuraName)
@@ -8141,12 +8149,12 @@ bool Spell::CheckEffectTarget(Unit const* target, uint32 eff) const
                     float y = m_targets.GetDstPos()->GetPositionY();
                     float z = m_targets.GetDstPos()->GetPositionZ();
 
-                    if (!target->IsWithinLOS(x, y, z, VMAP::ModelIgnoreFlags::M2, LineOfSightChecks(losChecks)))
+                    if (!target->IsWithinLOS(x, y, z, GetLineOfSightIgnoreFlags(), LineOfSightChecks(losChecks)))
                     {
                         return false;
                     }
                 }
-                else if (!m_caster->IsWithinLOSInMap(target, VMAP::ModelIgnoreFlags::M2, LineOfSightChecks(losChecks)))
+                else if (!m_caster->IsWithinLOSInMap(target, GetLineOfSightIgnoreFlags(), LineOfSightChecks(losChecks)))
                 {
                     return false;
                 }

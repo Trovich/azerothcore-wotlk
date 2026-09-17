@@ -357,7 +357,10 @@ void CreatureGroup::LeaderStartedMoving()
         if (member == m_leader || !member->IsAlive() || member->GetVictim() || !pFormationInfo.HasGroupFlag(std::underlying_type_t<GroupAIFlags>(GroupAIFlags::GROUP_AI_FLAG_FOLLOW_LEADER)))
             continue;
 
-        if (member->HasUnitState(UNIT_STATE_NOT_MOVE) || member->isPossessed() || member->HasUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED))
+        // Rooted / stunned members still get the generator: it holds them in place while they cannot move and
+        // falls in as soon as they can. Skipping them left a released member standing until the leader's
+        // next waypoint, which on long path segments meant falling behind by tens of yards.
+        if (member->isPossessed() || member->HasUnitFlag(UNIT_FLAG_PLAYER_CONTROLLED))
             continue;
 
         float const followAngle = pFormationInfo.follow_angle;

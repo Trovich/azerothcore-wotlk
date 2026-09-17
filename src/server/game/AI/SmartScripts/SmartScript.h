@@ -246,6 +246,12 @@ private:
     // Xinef: misc
     bool _allowPhaseReset;
 
+    // The legacy ranged-caster template: SMART_EVENT_RANGE rows switching
+    // SMART_ACTION_ALLOW_COMBAT_MOVEMENT on and off by distance alone.
+    bool _rangeBandCombatMovement;
+    // Combat movement was switched back on only because the victim was out of sight.
+    bool _combatMoveForLineOfSight;
+
     ObjectVectorMap _storedTargets;
 
     SMARTAI_TEMPLATE mTemplate;

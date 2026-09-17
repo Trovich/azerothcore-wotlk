@@ -186,6 +186,8 @@ void WorldConfig::BuildConfigCache()
     SetConfigValue<float>(CONFIG_MAX_RECRUIT_A_FRIEND_DISTANCE, "MaxRecruitAFriendBonusDistance", 100.0f);
 
     SetConfigValue<float>(CONFIG_SIGHT_MONSTER, "MonsterSight", 50.0f);
+    SetConfigValue<float>(CONFIG_VISIBILITY_DISTANCE_TRACKED_RESOURCES, "Visibility.Distance.TrackedResources", MAX_VISIBILITY_DISTANCE, ConfigValueCache::Reloadable::No,
+        [](float const& value) { return value >= 0.0f && value <= MAX_VISIBILITY_DISTANCE; }, "0 .. 250");
 
     SetConfigValue<uint32>(CONFIG_GAME_TYPE, "GameType", 0, ConfigValueCache::Reloadable::No);
     SetConfigValue<uint32>(CONFIG_REALM_ZONE, "RealmZone", REALM_ZONE_DEVELOPMENT, ConfigValueCache::Reloadable::No);
@@ -301,6 +303,7 @@ void WorldConfig::BuildConfigCache()
     SetConfigValue<bool>(CONFIG_OBJECT_QUEST_MARKERS, "Visibility.ObjectQuestMarkers", true);
 
     SetConfigValue<uint32>(CONFIG_MAIL_DELIVERY_DELAY, "MailDeliveryDelay", HOUR);
+    SetConfigValue<uint32>(CONFIG_MAIL_RECIPIENT_CAP, "MailboxRecipientCap", 0);
 
     SetConfigValue<uint32>(CONFIG_UPTIME_UPDATE, "UpdateUptimeInterval", 10, ConfigValueCache::Reloadable::Yes, [](uint32 const& value) { return value > 0; }, "> 0");
 
@@ -641,6 +644,7 @@ void WorldConfig::BuildConfigCache()
 
     // Whether to use LoS from game objects
     SetConfigValue<bool>(CONFIG_CHECK_GOBJECT_LOS, "CheckGameObjectLoS", true);
+    SetConfigValue<bool>(CONFIG_CHECK_M2_LOS_FOR_SPELLS, "CheckM2LoSForSpells", true);
 
     SetConfigValue<bool>(CONFIG_CALCULATE_CREATURE_ZONE_AREA_DATA, "Calculate.Creature.Zone.Area.Data", false);
     SetConfigValue<bool>(CONFIG_CALCULATE_GAMEOBJECT_ZONE_AREA_DATA, "Calculate.Gameoject.Zone.Area.Data", false);

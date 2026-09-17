@@ -180,7 +180,7 @@ void WorldSession::HandleSendMail(WorldPacket& recvData)
     Player* receive = ObjectAccessor::FindConnectedPlayer(receiverGuid);
 
     uint32 rc_teamId = TEAM_NEUTRAL;
-    uint16 mails_count = 0;                                  //do not allow to send to one player more than 100 mails
+    uint16 mails_count = 0;
 
     if (receive)
     {
@@ -196,8 +196,9 @@ void WorldSession::HandleSendMail(WorldPacket& recvData)
             mails_count = playerData->MailCount;
         }
     }
-    //do not allow to have more than 100 mails in mailbox.. mails count is in opcode uint8!!! - so max can be 255..
-    if (mails_count > 100)
+    // The mail list only ever sends the first MAX_INBOX_CLIENT_CAPACITY mails (the rest wait until
+    // the inbox is emptied), so a full mailbox does not need to refuse new mail - the cap is optional.
+    if (uint32 const cap = sWorld->getIntConfig(CONFIG_MAIL_RECIPIENT_CAP); cap && mails_count > cap)
     {
         player->SendMailResult(0, MAIL_SEND, MAIL_ERR_RECIPIENT_CAP_REACHED);
         return;

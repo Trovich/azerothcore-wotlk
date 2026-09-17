@@ -21,6 +21,7 @@
 #include "CombatAI.h"
 #include "CreatureScript.h"
 #include "CreatureTextMgr.h"
+#include "DBCStores.h"
 #include "GameEventMgr.h"
 #include "GameTime.h"
 #include "GridNotifiers.h"
@@ -390,8 +391,8 @@ struct npc_target_dummy : ScriptedAI
 
 enum SpawnType
 {
-    SPAWNTYPE_TRIPWIRE_ROOFTOP,                             // no warning, summon Creature at smaller range
-    SPAWNTYPE_ALARMBOT,                                     // cast guards mark and summon npc - if player shows up with that buff duration < 5 seconds attack
+    SPAWNTYPE_TRIPWIRE_ROOFTOP,                             // no warning, summon Creature at smaller range, on foot
+    SPAWNTYPE_ALARMBOT,                                     // cast guards mark and summon npc, which attacks straight away
 };
 
 struct SpawnAssociation
@@ -403,12 +404,14 @@ struct SpawnAssociation
 
 enum AirFoceBots
 {
-    SPELL_GUARDS_MARK               = 38067,
-    AURA_DURATION_TIME_LEFT         = 5000
+    SPELL_GUARDS_MARK               = 38067
 };
 
 float const RANGE_TRIPWIRE          = 15.0f;
-float const RANGE_GUARDS_MARK       = 50.0f;
+float const RANGE_ALARMBOT          = 70.0f;
+// guards already fighting within this distance of a post count towards MAX_RESPONDING_GUARDS
+float const RANGE_GUARD_RESPONSE    = 100.0f;
+uint32 const MAX_RESPONDING_GUARDS  = 5;
 
 SpawnAssociation spawnAssociations[] =
 {
@@ -483,7 +486,27 @@ public:
         SpawnAssociation* SpawnAssoc;
         ObjectGuid SpawnedGUID;
 
-        void Reset() override {}
+        void Reset() override
+        {
+            scheduler.CancelAll();
+
+            // Staggered so the dozens of posts around one town don't all scan on the same tick
+            scheduler.Schedule(randtime(0ms, 1000ms), [this](TaskContext context)
+            {
+                ScanForIntruders();
+                context.Repeat(1s);
+            });
+        }
+
+        void UpdateAI(uint32 diff) override
+        {
+            scheduler.Update(diff);
+        }
+
+        // The alarm used to be raised from here, which capped detection at MonsterSight (50 yd) and
+        // only fired when someone moved far enough to trigger a relocation notify. ScanForIntruders()
+        // takes over; the trigger itself must never react to anything.
+        void MoveInLineOfSight(Unit* /*who*/) override { }
 
         Creature* SummonGuard()
         {
@@ -522,79 +545,77 @@ public:
             return nullptr;
         }
 
-        void MoveInLineOfSight(Unit* who) override
+        bool IsIntruder(Player const* player) const
+        {
+            if (player->IsInFlight())
+                return false;
 
+            // Guard posts and trip wires are faction 190 (Ambient) and trip wires are IMMUNE_TO_PC as
+            // well, so the old me->IsValidAttackTarget(who) test could never pass for either of them -
+            // only the alarm bots ever raised the alarm. Whether someone is trespassing is decided by the
+            // faction of the guard the post calls in, reputation included (Aldor/Scryer, Sporeggar, ...).
+            CreatureTemplate const* guardTemplate = sObjectMgr->GetCreatureTemplate(SpawnAssoc->spawnedCreatureEntry);
+            FactionTemplateEntry const* guardFaction = sFactionTemplateStore.LookupEntry(guardTemplate->faction);
+            if (me->GetFactionReactionTo(guardFaction, player) > REP_HOSTILE)
+                return false;
+
+            // trip wires only catch intruders who have landed
+            if (SpawnAssoc->spawnType == SPAWNTYPE_TRIPWIRE_ROOFTOP && player->IsFlying())
+                return false;
+
+            return me->CanSeeOrDetect(player) && me->IsWithinLOSInMap(player);
+        }
+
+        uint32 CountRespondingGuards() const
+        {
+            std::list<Creature*> guards;
+            me->GetCreatureListWithEntryInGrid(guards, SpawnAssoc->spawnedCreatureEntry, RANGE_GUARD_RESPONSE);
+
+            return uint32(std::count_if(guards.begin(), guards.end(), [](Creature const* guard)
+            {
+                return guard->IsAlive() && guard->IsInCombat();
+            }));
+        }
+
+        void ScanForIntruders()
         {
             if (!SpawnAssoc)
                 return;
 
-            if (me->IsValidAttackTarget(who))
-            {
-                Player* playerTarget = who->ToPlayer();
+            float const range = SpawnAssoc->spawnType == SPAWNTYPE_ALARMBOT ? RANGE_ALARMBOT : RANGE_TRIPWIRE;
 
-                // airforce guards only spawn for players
-                if (!playerTarget)
+            std::list<Player*> players;
+            Acore::AnyPlayerInObjectRangeCheck checker(me, range, true, true);
+            Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(me, players, checker);
+            Cell::VisitObjects(me, searcher, range);
+
+            for (Player* player : players)
+            {
+                if (!IsIntruder(player))
+                    continue;
+
+                Creature* guard = GetSummonedGuard();
+                if (!guard)
+                    SpawnedGUID.Clear();
+                else if (guard->IsInCombat())
+                    return; // this post has already sent its guard up
+
+                // Every post in range answers, so over Honor Hold a flyer is inside a dozen or more of
+                // them at once - cap how many guards pile onto the area at the same time.
+                if (CountRespondingGuards() >= MAX_RESPONDING_GUARDS)
                     return;
 
-                Creature* lastSpawnedGuard = !SpawnedGUID ? nullptr : GetSummonedGuard();
+                if (!guard)
+                    guard = SummonGuard();
 
-                // prevent calling ObjectAccessor::GetUnit at next MoveInLineOfSight call - speedup
-                if (!lastSpawnedGuard)
-                    SpawnedGUID.Clear();
+                if (!guard)
+                    return;
 
-                switch (SpawnAssoc->spawnType)
-                {
-                    case SPAWNTYPE_ALARMBOT:
-                        {
-                            if (!who->IsWithinDistInMap(me, RANGE_GUARDS_MARK))
-                                return;
+                if (SpawnAssoc->spawnType == SPAWNTYPE_ALARMBOT && !player->HasAura(SPELL_GUARDS_MARK))
+                    guard->CastSpell(player, SPELL_GUARDS_MARK, true);
 
-                            Aura* markAura = who->GetAura(SPELL_GUARDS_MARK);
-                            if (markAura)
-                            {
-                                // the target wasn't able to move out of our range within 25 seconds
-                                if (!lastSpawnedGuard)
-                                {
-                                    lastSpawnedGuard = SummonGuard();
-
-                                    if (!lastSpawnedGuard)
-                                        return;
-                                }
-
-                                if (markAura->GetDuration() < AURA_DURATION_TIME_LEFT)
-                                    if (!lastSpawnedGuard->GetVictim())
-                                        lastSpawnedGuard->AI()->AttackStart(who);
-                            }
-                            else
-                            {
-                                if (!lastSpawnedGuard)
-                                    lastSpawnedGuard = SummonGuard();
-
-                                if (!lastSpawnedGuard)
-                                    return;
-
-                                lastSpawnedGuard->CastSpell(who, SPELL_GUARDS_MARK, true);
-                            }
-                            break;
-                        }
-                    case SPAWNTYPE_TRIPWIRE_ROOFTOP:
-                        {
-                            if (!who->IsWithinDistInMap(me, RANGE_TRIPWIRE))
-                                return;
-
-                            if (!lastSpawnedGuard)
-                                lastSpawnedGuard = SummonGuard();
-
-                            if (!lastSpawnedGuard)
-                                return;
-
-                            // ROOFTOP only triggers if the player is on the ground
-                            if (!playerTarget->IsFlying() && !lastSpawnedGuard->GetVictim())
-                                lastSpawnedGuard->AI()->AttackStart(who);
-
-                            break;
-                        }
-                }
+                guard->AI()->AttackStart(player);
+                return;
             }
         }
     };

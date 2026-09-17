@@ -130,6 +130,7 @@ void FormationMovementGenerator::LaunchMovement(Creature* owner, Unit* target)
 
     Position dest = target->GetPosition();
     float velocity = 0.0f;
+    float travelDist = 0.0f;
 
     if (!target->movespline->Finalized())
     {
@@ -137,7 +138,7 @@ void FormationMovementGenerator::LaunchMovement(Creature* owner, Unit* target)
         velocity = target->movespline->Velocity();
 
         // Calculate travel distance to get a 1650ms result
-        float travelDist = velocity * 1.65f;
+        travelDist = velocity * 1.65f;
         target->MovePositionToFirstCollision(dest, travelDist, relativeAngle);
         target->MovePositionToFirstCollision(dest, _range, _angle + relativeAngle);
 
@@ -156,8 +157,15 @@ void FormationMovementGenerator::LaunchMovement(Creature* owner, Unit* target)
     if (velocity == 0.0f)
         velocity = target->GetSpeed(MOVE_WALK);
 
+    // A member well out of its slot (respawned at its spawn point, back from a chase, released late) would crawl
+    // after the leader at 1.5x its pace in a straight line through whatever is in the way: run to catch up
+    // instead, along a real path.
+    bool const catchUp = owner->GetExactDist(dest) > travelDist + FORMATION_CATCH_UP_DISTANCE;
+    if (catchUp)
+        velocity = std::max(velocity, owner->GetSpeed(MOVE_RUN));
+
     Movement::MoveSplineInit init(owner);
-    init.MoveTo(dest.GetPositionX(), dest.GetPositionY(), dest.GetPositionZ());
+    init.MoveTo(dest.GetPositionX(), dest.GetPositionY(), dest.GetPositionZ(), catchUp && !owner->GetTransport());
     init.SetVelocity(velocity);
     init.Launch();
 

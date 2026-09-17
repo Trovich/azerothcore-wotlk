@@ -501,6 +501,8 @@ public:
     void WriteAmmoToPacket(WorldPacket* data);
 
     bool CheckEffectTarget(Unit const* target, uint32 eff) const;
+    // Static models (M2) that spell line of sight ignores - none when CheckM2LoSForSpells is on.
+    static VMAP::ModelIgnoreFlags GetLineOfSightIgnoreFlags();
     bool CanAutoCast(Unit* target);
     void CheckSrc() { if (!m_targets.HasSrc()) m_targets.SetSrc(*m_caster); }
     void CheckDst() { if (!m_targets.HasDst()) m_targets.SetDst(*m_caster); }

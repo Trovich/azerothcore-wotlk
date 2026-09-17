@@ -108,6 +108,20 @@ void SpellMgr::LoadSpellInfoCorrections()
         spellInfo->DurationEntry = &stormcrowShapeDuration;
     });
 
+    // Hellfire - The Exorcism, Jules threatens - quest 10935 "The Exorcism of Colonel Jules".
+    // Colonel Jules' action list keeps 39284 "Jules threatens, aura" on him for ~145s of the
+    // ritual; it re-casts this spell every 2000 ms, and besides its dummy/visual effect this
+    // spell's EFFECT_1 triggers 39305 "Summon Flying Skull" (server-side spell_dbc: Darkness
+    // Released, 40s). That is a new skull every two seconds, ~20 alive at once - the swarm
+    // players could never get through, and why widening the SmartAI summon timer on Jules
+    // changed nothing. The skull cadence is left to that SmartAI row alone; the aura and its
+    // periodic threat visual stay.
+    ApplySpellFix({ 39280 }, [](SpellInfo* spellInfo)
+    {
+        spellInfo->Effects[EFFECT_1].Effect = 0;
+        spellInfo->Effects[EFFECT_1].TriggerSpell = 0;
+    });
+
     ApplySpellFix({
         63026, // Force Cast (HACK: Target shouldn't be changed)
         63137  // Force Cast (HACK: Target shouldn't be changed; summon position should be untied from spell destination)

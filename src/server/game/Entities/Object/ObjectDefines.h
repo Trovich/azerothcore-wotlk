@@ -66,6 +66,7 @@ enum class VisibilityDistanceType : uint8
     Large    = 3,
     Gigantic = 4,
     Infinite = 5,
+    MinimapTracked = 6, // resource nodes shown by minimap tracking, Visibility.Distance.TrackedResources
 
     Max
 };

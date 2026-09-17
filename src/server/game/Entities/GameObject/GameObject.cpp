@@ -501,7 +501,44 @@ bool GameObject::Create(ObjectGuid::LowType guidlow, uint32 name_id, Map* map, u
     if (goinfo->IsInfiniteGameObject())
         SetVisibilityDistanceOverride(VisibilityDistanceType::Infinite);
 
+    // Herbs, ore, treasure and fish schools are drawn on the minimap by the Find Herbs / Minerals /
+    // Treasure / Fish tracking, but only once the client has been told about them - with the normal
+    // view range that is a circle well inside the zoomed-out minimap.
+    if (!IsVisibilityOverridden() && IsMinimapTrackedResource(goinfo)
+        && sWorld->getFloatConfig(CONFIG_VISIBILITY_DISTANCE_TRACKED_RESOURCES) > GetMap()->GetVisibilityRange())
+        SetVisibilityDistanceOverride(VisibilityDistanceType::MinimapTracked);
+
     return true;
+}
+
+bool GameObject::IsMinimapTrackedResource(GameObjectTemplate const* goinfo)
+{
+    if (goinfo->type != GAMEOBJECT_TYPE_CHEST && goinfo->type != GAMEOBJECT_TYPE_FISHINGHOLE)
+        return false;
+
+    LockEntry const* lock = sLockStore.LookupEntry(goinfo->GetLockId());
+    if (!lock)
+        return false;
+
+    for (uint8 i = 0; i < MAX_LOCK_CASE; ++i)
+    {
+        if (lock->Type[i] != LOCK_KEY_SKILL)
+            continue;
+
+        // lock types matched by SPELL_AURA_TRACK_RESOURCES of Find Herbs, Find Minerals, Find Treasure and Find Fish
+        switch (lock->Index[i])
+        {
+            case LOCKTYPE_HERBALISM:
+            case LOCKTYPE_MINING:
+            case LOCKTYPE_TREASURE:
+            case LOCKTYPE_FISHING:
+                return true;
+            default:
+                break;
+        }
+    }
+
+    return false;
 }
 
 void GameObject::Update(uint32 diff)

@@ -1299,6 +1299,19 @@ Visibility.Distance.Instances = 170
 Visibility.Distance.BGArenas = 250
 
 #
+#    Visibility.Distance.TrackedResources
+#        Description: Visibility distance of herbs, ore, treasure and fish schools - the nodes that
+#                     Find Herbs / Find Minerals / Find Treasure / Find Fish draw on the minimap. The
+#                     client can only show nodes it has been told about, so with the normal range the
+#                     dots stop well inside the zoomed-out minimap (about 233 yards across its radius).
+#                     Only takes effect where it is larger than the map's normal visibility distance.
+#                     Max: 250
+#        Default:     250 - (Covers the whole minimap)
+#                     0   - (Normal visibility distance)
+
+Visibility.Distance.TrackedResources = 250
+
+#
 #    Visibility.ObjectSparkles
 #        Description: Whether or not to display sparkles on gameobjects related to active quests.
 #        Default:     1 - (Show Sparkles)
@@ -1400,6 +1413,18 @@ DetectPosCollision = 1
 #                     0 - (Disabled, may break some boss encounters)
 
 CheckGameObjectLoS = 1
+
+#
+#    CheckM2LoSForSpells
+#        Description: Let doodad models (trees, rocks, fences, statues - the M2 models baked into
+#                     vmaps) block line of sight for spells, the same way they already block it for
+#                     movement and aggro. Stock 3.3.5 ignores them, so spells go through trees.
+#                     Creature casters that lose sight of their target this way walk round the
+#                     obstacle; players get "Target not in line of sight" behind a tree trunk.
+#        Default:     1 - (Enabled, trees block spells)
+#                     0 - (Disabled, stock behaviour)
+
+CheckM2LoSForSpells = 1
 
 #
 #    PreloadAllNonInstancedMapGrids
@@ -4281,6 +4306,17 @@ MaxAllowedMMRDrop = 500
 #        Default:     3600 - (1 hour)
 
 MailDeliveryDelay = 3600
+
+#
+#    MailboxRecipientCap
+#        Description: Players cannot send mail to a character that already has more than this
+#                     many mails waiting (MAIL_ERR_RECIPIENT_CAP_REACHED). The client only ever
+#                     lists the first 50 mails; the rest stay queued and appear as the mailbox
+#                     is emptied, so the cap is not needed for the client's sake.
+#        Default:     0   - (No cap)
+#                     100 - (Stock AzerothCore)
+
+MailboxRecipientCap = 0
 
 #
 #     LevelReq.Mail

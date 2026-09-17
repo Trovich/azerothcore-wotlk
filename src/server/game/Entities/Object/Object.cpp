@@ -65,7 +65,8 @@ constexpr float VisibilityDistances[AsUnderlyingType(VisibilityDistanceType::Max
     VISIBILITY_DISTANCE_SMALL,
     VISIBILITY_DISTANCE_LARGE,
     VISIBILITY_DISTANCE_GIGANTIC,
-    VISIBILITY_DISTANCE_INFINITE
+    VISIBILITY_DISTANCE_INFINITE,
+    VISIBILITY_DISTANCE_LARGE // MinimapTracked, configured - see GetVisibilityOverrideDistance()
 };
 
 Object::Object() : m_PackGUID(sizeof(uint64) + 1)
@@ -1106,6 +1107,9 @@ void WorldObject::setActive(bool on)
 float WorldObject::GetVisibilityOverrideDistance() const
 {
     ASSERT(_visibilityDistanceOverrideType < VisibilityDistanceType::Max);
+    if (_visibilityDistanceOverrideType == VisibilityDistanceType::MinimapTracked)
+        return sWorld->getFloatConfig(CONFIG_VISIBILITY_DISTANCE_TRACKED_RESOURCES);
+
     return VisibilityDistances[AsUnderlyingType(_visibilityDistanceOverrideType)];
 }
 

@@ -81,6 +81,9 @@ public:
     uint32 GetPeriod() const { return GetUInt32Value(GAMEOBJECT_LEVEL); }
     void SetPeriod(uint32 period) { SetUInt32Value(GAMEOBJECT_LEVEL, period); }
 
+    //! Helper to know if stop frame was reached
+    bool IsMoving() const { return _isMoving; }
+
     std::string GetDebugInfo() const override;
 private:
     void MoveToNextWaypoint();
@@ -92,8 +95,6 @@ private:
 
     uint32 HandleFirstDepartureSync(uint32 diff);
 
-    //! Helpers to know if stop frame was reached
-    bool IsMoving() const { return _isMoving; }
     void SetMoving(bool val) { _isMoving = val; }
 
     TransportTemplate const* _transportInfo;
