@@ -1,0 +1,11 @@
+--
+-- Brewfest Reveler (24484) is neutral and attackable in Alliance capitals.
+--
+-- The same template is spawned in all 8 capitals (game_event 24), but its faction (775) has
+-- FriendGroup 4 (Horde only) - friendly to Horde players everywhere it stands, but merely neutral (so,
+-- attackable, and apparently attacked) to Alliance ones in Stormwind/Ironforge/Darnassus/The Exodar.
+-- The other Brewfest NPC template, Drunken Brewfest Reveler (23698), already uses faction 35, whose
+-- FriendGroup 1 (Player, no faction restriction) is friendly to both sides everywhere - the correct
+-- faction for a decoration NPC that stands in everyone's capital. Match it.
+--
+UPDATE `creature_template` SET `faction` = 35 WHERE `entry` = 24484;

@@ -475,6 +475,11 @@ Unit::~Unit()
     ASSERT(!m_attacking);
     ASSERT(m_attackers.empty());
 
+    // Drop the back references of anything still following us. RemoveFromWorld does this for a unit that leaves
+    // the map properly, but a follower registered after that (or on another map thread) would be left holding a
+    // pointer into freed memory and crash in AbstractFollower::SetTarget when its generator is deleted.
+    RemoveAllFollowers();
+
     // pussywizard: clear m_sharedVision along with back references
     if (!m_sharedVision.empty())
     {

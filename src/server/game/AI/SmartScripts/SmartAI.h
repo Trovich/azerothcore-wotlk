@@ -69,6 +69,7 @@ public:
     void SetCurrentRangeMode(bool on, float range = 0.f);
     void SetMainSpell(uint32 spellId);
     void DistanceYourself(float range);
+    bool KeepDistance(Unit* victim);
     void SetFollow(Unit* target, float dist = 0.0f, float angle = 0.0f, uint32 credit = 0, uint32 end = 0, uint32 creditType = 0, bool aliveState = true);
     void StopFollow(bool complete);
 
@@ -221,6 +222,7 @@ public:
     // Xinef
     void SetWPPauseTimer(uint32 time) { mWPPauseTimer = time; }
 
+    void DistancingStarted() override;
     void DistancingEnded() override;
 
     bool IsMainSpellPrevented(SpellInfo const* spellInfo) const;
@@ -283,6 +285,11 @@ private:
     float _attackDistance;
     float _pendingDistancing;
     uint32 _mainSpellId;
+
+    // SMARTCAST_KEEP_DISTANCE on the main spell
+    bool _keepDistance;
+    bool _isDistancing;
+    uint32 _keepDistanceRetryTimer;
 };
 
 class SmartGameObjectAI : public GameObjectAI

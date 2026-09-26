@@ -24,6 +24,20 @@
 #include "Spell.h"
 #include "Transport.h"
 
+// A creature walking a scripted path only slows its spline down: MoveSplineInit deliberately leaves the
+// unit's own walk flag alone, so a follower that trusted that flag alone jogged along behind a strolling
+// leader. Fall back to the speed the leader is actually moving at.
+static bool IsTargetWalking(Unit const* target)
+{
+    if (target->IsWalking())
+        return true;
+
+    if (target->movespline->Finalized())
+        return false;
+
+    return target->movespline->Velocity() <= target->GetSpeed(MOVE_WALK) + 0.01f;
+}
+
 static bool IsMutualChase(Unit* owner, Unit* target)
 {
     if (target->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
@@ -458,7 +472,7 @@ static float GetTargetSpeedInMotion(Unit* target)
     return target->GetSpeed(target->m_movementInfo.GetSpeedType());
 }
 
-static Optional<float> GetVelocity(Unit* owner, Unit* target, G3D::Vector3 const& dest, bool playerPet)
+static Optional<float> GetVelocity(Unit* owner, Unit* target, G3D::Vector3 const& dest)
 {
     Optional<float> speed = {};
     if (owner->IsInCombat() || owner->IsVehicle() || owner->HasUnitFlag(UNIT_FLAG_POSSESSED))
@@ -471,14 +485,15 @@ static Optional<float> GetVelocity(Unit* owner, Unit* target, G3D::Vector3 const
     {
         speed = GetTargetSpeedInMotion(target);
 
-        if (playerPet)
+        // Catch up when behind - a plain speed match only holds position while nothing forces a
+        // detour (a corner, an obstacle); without this a follower that fell back on a turn never
+        // closes the gap again and the formation drifts apart. Used to be player-pet only; SmartAI
+        // followers (escort companions, e.g. Miss Danna's orphans) want the same catch-up.
+        float distance = owner->GetDistance2d(dest.x, dest.y) - target->GetObjectSize() - (*speed / 2.f);
+        if (distance > 0.f)
         {
-            float distance = owner->GetDistance2d(dest.x, dest.y) - target->GetObjectSize() - (*speed / 2.f);
-            if (distance > 0.f)
-            {
-                float multiplier = 1.f + (distance / 10.f);
-                *speed *= multiplier;
-            }
+            float multiplier = 1.f + (distance / 10.f);
+            *speed *= multiplier;
         }
     }
 
@@ -705,10 +720,10 @@ bool FollowMovementGenerator<T>::DoUpdate(T* owner, uint32 time_diff)
         Movement::MoveSplineInit init(owner);
         init.MovebyPath(i_path->GetPath());
         if (_inheritWalkState)
-            init.SetWalk(target->IsWalking());
+            init.SetWalk(IsTargetWalking(target));
 
         if (_inheritSpeed)
-            if (Optional<float> velocity = GetVelocity(owner, target, i_path->GetActualEndPosition(), owner->IsGuardian()))
+            if (Optional<float> velocity = GetVelocity(owner, target, i_path->GetActualEndPosition()))
                 init.SetVelocity(*velocity);
         init.Launch();
     }

@@ -27,6 +27,7 @@
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
 #include "Vehicle.h"
+#include <algorithm>
 
 SmartAI::SmartAI(Creature* c) : CreatureAI(c)
 {
@@ -84,7 +85,12 @@ SmartAI::SmartAI(Creature* c) : CreatureAI(c)
 
     _currentRangeMode = false;
     _attackDistance = 0.f;
+    _pendingDistancing = 0.f;
     _mainSpellId = 0;
+
+    _keepDistance = false;
+    _isDistancing = false;
+    _keepDistanceRetryTimer = 0;
 }
 
 bool SmartAI::IsAIControlled() const
@@ -593,6 +599,9 @@ void SmartAI::UpdateAI(uint32 diff)
         return;
     }
 
+    if (_keepDistanceRetryTimer)
+        _keepDistanceRetryTimer = _keepDistanceRetryTimer > diff ? _keepDistanceRetryTimer - diff : 0;
+
     if (!hasVictim)
         return;
 
@@ -613,7 +622,17 @@ void SmartAI::UpdateMeleeStance()
     if (!victim)
         return;
 
-    bool const canMelee = me->IsWithinMeleeRange(victim);
+    bool canMelee = me->IsWithinMeleeRange(victim);
+
+    // a ranged fighter keeping its distance backs off instead of drawing its melee weapon
+    if (_keepDistance)
+    {
+        SpellInfo const* mainSpell = sSpellMgr->GetSpellInfo(_mainSpellId);
+        if (mainSpell && me->GetDistance(victim) < me->GetSpellMinRangeForTarget(victim, mainSpell) &&
+            KeepDistance(victim))
+            canMelee = false;
+    }
+
     if (canMelee != me->HasUnitState(UNIT_STATE_MELEE_ATTACKING))
         me->Attack(victim, canMelee);
 }
@@ -754,6 +773,7 @@ void SmartAI::EnterEvadeMode(EvadeReason why)
     if (!_EnterEvadeMode())
         return;
 
+    _isDistancing = false;
     me->AddUnitState(UNIT_STATE_EVADE);
 
     GetScript()->ProcessEventsFor(SMART_EVENT_EVADE); //must be after aura clear so we can cast spells from db
@@ -1073,6 +1093,13 @@ void SmartAI::InitializeAI()
         }
     }
 
+    _keepDistance = _currentRangeMode && std::any_of(GetScript()->GetEvents().begin(), GetScript()->GetEvents().end(),
+        [this](SmartScriptHolder const& event)
+        {
+            return event.GetActionType() == SMART_ACTION_CAST && event.action.cast.spell == _mainSpellId &&
+                (event.action.cast.castFlags & SMARTCAST_KEEP_DISTANCE);
+        });
+
     if (!me->isDead())
     {
         mJustReset = true;
@@ -1221,6 +1248,7 @@ void SmartAI::SetCurrentRangeMode(bool on, float range)
 {
     _currentRangeMode = on;
     _attackDistance = range;
+    _isDistancing = false; // the new chase replaces any backing off in progress
 
     if (Unit* victim = me->GetVictim())
     {
@@ -1258,6 +1286,53 @@ void SmartAI::DistanceYourself(float range)
     _pendingDistancing = distance;
 }
 
+// Backs away from the victim to the middle of the main spell's range (SMARTCAST_KEEP_DISTANCE).
+// Returns false if the creature cannot, and should fight where it stands for now.
+bool SmartAI::KeepDistance(Unit* victim)
+{
+    if (!_keepDistance || !victim || victim != me->GetVictim())
+        return false;
+
+    if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() != CHASE_MOTION_TYPE)
+        return false;
+
+    // already on its way
+    if (_isDistancing && !me->movespline->Finalized())
+        return true;
+
+    _isDistancing = false;
+
+    if (_keepDistanceRetryTimer || me->IsRooted())
+        return false;
+
+    if (me->HasUnitState(UNIT_STATE_NOT_MOVE | UNIT_STATE_NO_COMBAT_MOVEMENT))
+        return false;
+
+    SpellInfo const* mainSpell = sSpellMgr->GetSpellInfo(_mainSpellId);
+    if (!mainSpell)
+        return false;
+
+    float const minRange = me->GetSpellMinRangeForTarget(victim, mainSpell);
+    float const maxRange = me->GetSpellMaxRangeForTarget(victim, mainSpell);
+    float const distance = std::max(minRange + NOMINAL_MELEE_RANGE, (minRange + maxRange) / 2.0f - NOMINAL_MELEE_RANGE);
+
+    me->GetMotionMaster()->DistanceYourself(distance);
+    if (!_isDistancing)
+    {
+        // cornered: fight in melee for a while before trying again
+        _keepDistanceRetryTimer = 3 * IN_MILLISECONDS;
+        return false;
+    }
+
+    _pendingDistancing = distance;
+    return true;
+}
+
+void SmartAI::DistancingStarted()
+{
+    _isDistancing = true;
+}
+
 void SmartAI::SetFollow(Unit* target, float dist, float angle, uint32 credit, uint32 end, uint32 creditType, bool aliveState)
 {
     if (!target)
@@ -1275,7 +1350,11 @@ void SmartAI::SetFollow(Unit* target, float dist, float angle, uint32 credit, ui
     mFollowArrivedEntry = end;
     mFollowArrivedAlive = !aliveState; // negate - 0 is alive
     mFollowCreditType = creditType;
-    me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle, MOTION_SLOT_ACTIVE, true, false);
+    // inheritSpeed true: the follower syncs to whatever the target is actually doing (walk, run, or
+    // mid-turn spline velocity) instead of always using its own fixed walk speed. Without it a
+    // follower that fell behind on a turn - e.g. Miss Danna's orphans keeping their fan formation as
+    // she walks a winding path - never closed the gap and the formation dragged out of shape.
+    me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle, MOTION_SLOT_ACTIVE, true, true);
 }
 
 void SmartAI::StopFollow(bool complete)

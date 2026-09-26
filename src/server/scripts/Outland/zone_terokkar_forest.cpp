@@ -608,6 +608,71 @@ public:
     }
 };
 
+enum VeilSkithDarkstone
+{
+    QUEST_DARKSTONE_OF_TEROKK   = 10839,
+    GO_DARKSTONE_OF_TEROKK      = 185191,
+    DARKSTONE_SEARCH_RANGE      = 20
+};
+
+// 38736 - Rod of Purification, the spell on the item. It lands on a trigger that stands by the
+// Darkstone whether the stone is there or not, so the rod happily "worked" on a stone somebody else
+// had already purified - no stone, no cast.
+class spell_q10839_rod_of_purification : public SpellScript
+{
+    PrepareSpellScript(spell_q10839_rod_of_purification);
+
+    SpellCastResult CheckCast()
+    {
+        if (GetCaster()->FindNearestGameObject(GO_DARKSTONE_OF_TEROKK, float(DARKSTONE_SEARCH_RANGE), true))
+            return SPELL_CAST_OK;
+
+        SetCustomCastResultMessage(SPELL_CUSTOM_ERROR_NO_VALID_TARGETS);
+        return SPELL_FAILED_CUSTOM_ERROR;
+    }
+
+    void Register() override
+    {
+        OnCheckCast += SpellCheckCastFn(spell_q10839_rod_of_purification::CheckCast);
+    }
+};
+
+// 38729 - Rod of Purification, what the rod's aura triggers: it opens the stone and completes the
+// quest for whoever cast it. The stone then stays down for three minutes, so the rest of the party
+// had nothing left to purify; they are credited along with the one who got there first.
+class spell_q10839_purify_darkstone : public SpellScript
+{
+    PrepareSpellScript(spell_q10839_purify_darkstone);
+
+    void HandleAfterCast()
+    {
+        // the rod's aura does the casting, so the player who used it can be either caster or original one
+        Unit* caster = GetOriginalCaster() ? GetOriginalCaster() : GetCaster();
+        Player* player = caster ? caster->GetCharmerOrOwnerPlayerOrPlayerItself() : nullptr;
+        if (!player)
+            return;
+
+        Group* group = player->GetGroup();
+        if (!group)
+            return;
+
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* member = itr->GetSource();
+            if (!member || member == player || !member->IsInMap(player) || !member->IsAtGroupRewardDistance(player))
+                continue;
+
+            if (member->GetQuestStatus(QUEST_DARKSTONE_OF_TEROKK) == QUEST_STATUS_INCOMPLETE)
+                member->AreaExploredOrEventHappens(QUEST_DARKSTONE_OF_TEROKK);
+        }
+    }
+
+    void Register() override
+    {
+        AfterCast += SpellCastFn(spell_q10839_purify_darkstone::HandleAfterCast);
+    }
+};
+
 void AddSC_terokkar_forest()
 {
     RegisterSpellAndAuraScriptPair(spell_q10930_big_bone_worm, spell_q10930_big_bone_worm_aura);
@@ -617,6 +682,8 @@ void AddSC_terokkar_forest()
     RegisterSpellScript(spell_q10923_evil_draws_near_periodic_aura);
     RegisterSpellScript(spell_q10923_evil_draws_near_visual);
     RegisterSpellScript(spell_q10898_skywing);
+    RegisterSpellScript(spell_q10839_rod_of_purification);
+    RegisterSpellScript(spell_q10839_purify_darkstone);
     new npc_unkor_the_ruthless();
     new npc_isla_starmane();
     new go_skull_pile();

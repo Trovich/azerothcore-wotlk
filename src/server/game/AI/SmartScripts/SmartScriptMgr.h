@@ -1989,6 +1989,7 @@ enum SmartCastFlags
     SMARTCAST_TARGET_POWER_MANA         = 0x100,                  // Only cast if the target has power type mana (e.g. Mana Drain)
     SMARTCAST_ENABLE_COMBAT_MOVE_ON_LOS = 0x200,                  // Allows combat movement when not in line of sight
     SMARTCAST_MAIN_SPELL                = 0x400,                  // Sets this spell's max range as the creature's chase distance on spawn
+    SMARTCAST_KEEP_DISTANCE             = 0x800,                  // Ranged spell: back away from a too close victim, no melee
 };
 
 enum SmartFollowType

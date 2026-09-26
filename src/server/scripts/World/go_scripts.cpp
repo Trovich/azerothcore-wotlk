@@ -22,6 +22,7 @@
 #include "GameObjectAI.h"
 #include "GameObjectScript.h"
 #include "GridNotifiersImpl.h"
+#include "Group.h"
 #include "Player.h"
 #include "ScriptedCreature.h"
 #include "ScriptedGossip.h"
@@ -1665,20 +1666,43 @@ public:
     bool OnGossipHello(Player* player, GameObject* go) override
     {
         go->UseDoorOrButton();
-        if (player->GetQuestStatus(QUEST_MISSING_FRIENDS) == QUEST_STATUS_INCOMPLETE)
+        if (player->GetQuestStatus(QUEST_MISSING_FRIENDS) != QUEST_STATUS_INCOMPLETE)
+            return false;
+
+        std::list<Creature*> childrenList;
+        GetCreatureListWithEntryInGrid(childrenList, go, NPC_CAPTIVE_CHILD, INTERACTION_DISTANCE);
+        for (Creature* child : childrenList)
         {
-            std::list<Creature*> childrenList;
-            GetCreatureListWithEntryInGrid(childrenList, go, NPC_CAPTIVE_CHILD, INTERACTION_DISTANCE);
-            for (std::list<Creature*>::const_iterator itr = childrenList.begin(); itr != childrenList.end(); ++itr)
-            {
-                player->KilledMonsterCredit(NPC_CAPTIVE_CHILD, (*itr)->GetGUID());
-                (*itr)->DespawnOrUnsummon(5s);
-                (*itr)->GetMotionMaster()->MovePoint(1, go->GetPositionX() + 5, go->GetPositionY(), go->GetPositionZ());
-                (*itr)->AI()->Talk(SAY_FREE_0);
-                (*itr)->GetMotionMaster()->Clear();
-            }
+            // The cage opens once and the children leave for good, so the whole party gets them out
+            // together - otherwise only whoever clicked first could count them.
+            CreditChildren(player, go, child->GetGUID());
+            child->DespawnOrUnsummon(5s);
+            child->AI()->Talk(SAY_FREE_0);
+            child->GetMotionMaster()->Clear();
+            child->GetMotionMaster()->MovePoint(1, go->GetPositionX() + 5, go->GetPositionY(), go->GetPositionZ());
         }
         return false;
+    }
+
+private:
+    static void CreditChildren(Player* player, GameObject* go, ObjectGuid childGuid)
+    {
+        Group* group = player->GetGroup();
+        if (!group)
+        {
+            player->KilledMonsterCredit(NPC_CAPTIVE_CHILD, childGuid);
+            return;
+        }
+
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* member = itr->GetSource();
+            if (!member || !member->IsInMap(player) || !member->IsAtGroupRewardDistance(go))
+                continue;
+
+            if (member->GetQuestStatus(QUEST_MISSING_FRIENDS) == QUEST_STATUS_INCOMPLETE)
+                member->KilledMonsterCredit(NPC_CAPTIVE_CHILD, childGuid);
+        }
     }
 };
 

@@ -749,6 +749,12 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
                         if (me->IsRooted()) // Rooted inhabit type, never move/reposition
                             continue;
 
+                        // told to keep its distance: back off rather than close in to melee
+                        bool const keepDistance = (e.action.cast.castFlags & SMARTCAST_KEEP_DISTANCE)
+                            && isWithinLOSInMap && distanceToTarget < spellMinRange;
+                        if (keepDistance && CAST_AI(SmartAI, me->AI())->KeepDistance(target->ToUnit()))
+                            continue;
+
                         CAST_AI(SmartAI, me->AI())->SetCurrentRangeMode(true, 0.f);
                         if (e.action.cast.castFlags & SMARTCAST_ENABLE_COMBAT_MOVE_ON_LOS)
                             CAST_AI(SmartAI, me->AI())->SetCombatMovement(true, true);
