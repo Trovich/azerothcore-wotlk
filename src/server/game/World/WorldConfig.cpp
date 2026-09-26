@@ -304,6 +304,7 @@ void WorldConfig::BuildConfigCache()
 
     SetConfigValue<uint32>(CONFIG_MAIL_DELIVERY_DELAY, "MailDeliveryDelay", HOUR);
     SetConfigValue<uint32>(CONFIG_MAIL_RECIPIENT_CAP, "MailboxRecipientCap", 0);
+    SetConfigValue<bool>(CONFIG_MAIL_PUSH_INBOX_ON_DELIVERY, "Mail.PushInboxOnDelivery", false);
 
     SetConfigValue<uint32>(CONFIG_UPTIME_UPDATE, "UpdateUptimeInterval", 10, ConfigValueCache::Reloadable::Yes, [](uint32 const& value) { return value > 0; }, "> 0");
 
