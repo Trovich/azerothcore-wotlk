@@ -637,6 +637,15 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
         sScriptMgr->AnticheatSetJumpingbyOpcode(plrMover, false);
     }
 
+    // fall damage for a player-driven vehicle (player fall is handled above).
+    // Must run before the parachute removal below, like HandleFall does.
+    if (opcode == MSG_MOVE_FALL_LAND && !plrMover && !mover->IsInFlight())
+    {
+        if (Unit* vehicleBase = _player->GetVehicleBase())
+            if (vehicleBase == mover)
+                _player->HandleVehicleFall(vehicleBase, movementInfo);
+    }
+
     // interrupt parachutes upon falling or landing in water
     if (opcode == MSG_MOVE_FALL_LAND || opcode == MSG_MOVE_START_SWIM)
     {
@@ -646,14 +655,6 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
         {
             sScriptMgr->AnticheatSetJumpingbyOpcode(plrMover, false);
         }
-    }
-
-    // fall damage for a player-driven vehicle (player fall is handled above)
-    if (opcode == MSG_MOVE_FALL_LAND && !plrMover && !mover->IsInFlight())
-    {
-        if (Unit* vehicleBase = _player->GetVehicleBase())
-            if (vehicleBase == mover)
-                _player->HandleVehicleFall(vehicleBase, movementInfo);
     }
 
     if (plrMover && ((movementInfo.flags & MOVEMENTFLAG_SWIMMING) != 0) != plrMover->IsInWater())
@@ -679,6 +680,10 @@ bool WorldSession::ProcessMovementInfo(MovementInfo& movementInfo, Unit* mover, 
 
     if (plrMover && opcode != CMSG_MOVE_KNOCK_BACK_ACK)
         plrMover->UpdateFallInformationIfNeed(movementInfo, opcode);
+    // a player-driven vehicle keeps its fall start in the driver's fall info (read by
+    // Player::HandleVehicleFall); without this it stays at the Z where the driver boarded
+    else if (!plrMover && opcode != CMSG_MOVE_KNOCK_BACK_ACK && mover == _player->GetVehicleBase())
+        _player->UpdateFallInformationIfNeed(movementInfo, opcode);
 
     return true;
 }

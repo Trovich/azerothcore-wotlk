@@ -14263,7 +14263,8 @@ void Player::HandleVehicleFall(Unit* vehicleBase, MovementInfo const& movementIn
     float z_diff = m_lastFallZ - movementInfo.pos.GetPositionZ();
 
     if (z_diff >= MIN_FALL_DMG_DIST && vehicleBase->IsAlive() &&
-        !HasHoverAura() && !HasFeatherFallAura() && !HasFlyAura())
+        !HasHoverAura() && !HasFeatherFallAura() && !HasFlyAura() &&
+        !vehicleBase->HasHoverAura() && !vehicleBase->HasFeatherFallAura() && !vehicleBase->HasFlyAura())
     {
         int32 safe_fall = GetTotalAuraModifier(SPELL_AURA_SAFE_FALL);
         float damageperc = FALL_DMG_EQU_SLOPE * (z_diff - safe_fall) + FALL_DMG_EQU_INTERCEPT;

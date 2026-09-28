@@ -600,14 +600,16 @@ public:
             // See also: http://dev.mysql.com/doc/refman/5.0/en/problems-with-float.html
             std::string maxDiff = "0.01";
 
-            WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_WAYPOINT_DATA_BY_POS);
+            // Assign to the outer stmt/result: redeclaring them here shadowed the outer result, which stayed
+            // null and was dereferenced by the loop below.
+            stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_WAYPOINT_DATA_BY_POS);
             stmt->SetData(0, target->GetPositionX());
             stmt->SetData(1, maxDiff);
             stmt->SetData(2, target->GetPositionY());
             stmt->SetData(3, maxDiff);
             stmt->SetData(4, target->GetPositionZ());
             stmt->SetData(5, maxDiff);
-            PreparedQueryResult result = WorldDatabase.Query(stmt);
+            result = WorldDatabase.Query(stmt);
 
             if (!result)
             {
@@ -691,6 +693,15 @@ public:
                     }
 
                     wpCreature2->SaveToDB(map->GetId(), (1 << map->GetSpawnMode()), chr->GetPhaseMaskForSpawn());
+
+                    // The visual got a new spawn id: point waypoint_data at it, otherwise the next
+                    // ".wp modify" on this visual cannot find its waypoint by wpguid.
+                    WorldDatabasePreparedStatement* wpguidStmt = WorldDatabase.GetPreparedStatement(WORLD_UPD_WAYPOINT_DATA_WPGUID);
+                    wpguidStmt->SetData(0, wpCreature2->GetSpawnId());
+                    wpguidStmt->SetData(1, pathid);
+                    wpguidStmt->SetData(2, point);
+                    WorldDatabase.Execute(wpguidStmt);
+
                     // To call _LoadGoods(); _LoadQuests(); CreateTrainerSpells();
                     //TODO: Should we first use "Create" then use "LoadFromDB"?
                     if (!wpCreature2->LoadCreatureFromDB(wpCreature2->GetSpawnId(), map, true, true))

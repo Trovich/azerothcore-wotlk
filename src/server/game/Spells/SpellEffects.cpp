@@ -3667,7 +3667,7 @@ void Spell::EffectWeaponDmg(SpellEffIndex effIndex)
                         // retribution converts a large slice of attack power into holy
                         // spell power (Sheath of Light), which Seal of Righteousness
                         // scales off and this strike would not.
-                        spell_bonus += int32(0.7f * m_caster->SpellBaseDamageBonusDone(m_spellInfo->GetSchoolMask()));
+                        spell_bonus += int32(0.7f * unitCaster->SpellBaseDamageBonusDone(m_spellInfo->GetSchoolMask()));
                         break;
                     case 53385:  // Divine Storm deals normalized damage
                         normalized = true;
