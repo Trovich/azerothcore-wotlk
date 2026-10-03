@@ -365,6 +365,14 @@ bool WaypointMovementGenerator<Creature>::DoUpdate(Creature* creature, uint32 di
     if (_done || !i_path || i_path->Nodes.empty())
         return true;
 
+    // The path may have been reloaded in place (.wp reload, .reload waypoint_data) with fewer points than
+    // our index: Nodes.at() would throw. Start over from the first point.
+    if (i_currentNode >= i_path->Nodes.size())
+    {
+        i_currentNode = 0;
+        _smoothSplineLaunched = false;
+    }
+
     // Stop movement if paused, rooted, or casting
     if (!IsAllowedToMove(creature) && !creature->movespline->Finalized())
     {
@@ -516,7 +524,10 @@ bool WaypointMovementGenerator<Creature>::GetResetPosition(float& x, float& y, f
     if (_done)
         return false;
 
-    ASSERT(i_currentNode < i_path->Nodes.size(), "WaypointMovementGenerator::GetResetPos: tried to reference a node id ({}) which is not included in path ({})", i_currentNode, i_path->Id);
+    // reloaded in place with fewer points (see DoUpdate)
+    if (i_currentNode >= i_path->Nodes.size())
+        i_currentNode = 0;
+
     WaypointNode const& waypoint = i_path->Nodes.at(i_currentNode);
 
     x = waypoint.X;

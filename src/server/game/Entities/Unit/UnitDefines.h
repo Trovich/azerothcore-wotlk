@@ -92,6 +92,7 @@ enum ShapeshiftForm
     FORM_TEST                           = 0x14,
     FORM_ZOMBIE                         = 0x15,
     FORM_METAMORPHOSIS                  = 0x16,
+    FORM_WORGEN                         = 0x17,         // custom: stock row 23 is empty, filled by client-patches/worgen-curse (mod-scourge-invasion-2008)
     FORM_UNDEAD                         = 0x19,
     FORM_MASTER_ANGLER                  = 0x1A,
     FORM_FLIGHT_EPIC                    = 0x1B,

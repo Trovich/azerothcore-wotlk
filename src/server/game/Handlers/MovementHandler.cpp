@@ -707,8 +707,11 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket& recvData)
 
     Unit* mover = _player->m_mover;
 
-    // pussywizard: special check, only player mover allowed here
-    if (guid != mover->GetGUID() || guid != _player->GetGUID())
+    // pussywizard: special check, only the unit this client moves: the player itself, or the
+    // vehicle it drives (Unit::SetSpeed sends a client-controlled vehicle's new speed to its
+    // driver only; without this ACK nobody else learns it and passengers/observers keep
+    // extrapolating the vehicle at the old speed -> it rubber-bands on every heartbeat)
+    if (guid != mover->GetGUID() || (mover != _player && mover->GetCharmerGUID() != _player->GetGUID()))
     {
         recvData.rfinish(); // prevent warnings spam
         return;
@@ -718,7 +721,7 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket& recvData)
     if (counter <= _player->GetMapChangeOrderCounter())
         return;
 
-    if (!ProcessMovementInfo(movementInfo, mover, _player, recvData))
+    if (!ProcessMovementInfo(movementInfo, mover, mover->ToPlayer(), recvData))
     {
         recvData.rfinish();                     // prevent warnings spam
         return;
@@ -773,7 +776,8 @@ void WorldSession::HandleForceSpeedChangeAck(WorldPacket& recvData)
             return;
     }
 
-    if (!_player->GetTransport() && std::fabs(_player->GetSpeed(move_type) - newspeed) > 0.01f)
+    // the speed sanity check / kick is about the player's own speed; a vehicle's speed is server-driven
+    if (mover == _player && !_player->GetTransport() && std::fabs(_player->GetSpeed(move_type) - newspeed) > 0.01f)
     {
         if (_player->GetSpeed(move_type) > newspeed)         // must be greater - just correct
         {

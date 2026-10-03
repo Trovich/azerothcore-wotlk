@@ -32,6 +32,11 @@ void WaypointMgr::Load()
 {
     uint32 oldMSTime = getMSTime();
 
+    // Also used by ".reload waypoint_data": start every known path empty, or the rows below get appended to
+    // the nodes already loaded and every path is doubled. The paths themselves stay (see ReloadPath).
+    for (auto& [pathId, path] : _waypointStore)
+        path.Nodes.clear();
+
     //                                                0    1         2           3          4            5          6      7      8                 9         10       11
     QueryResult result = WorldDatabase.Query("SELECT id, point, position_x, position_y, position_z, orientation, velocity, delay, smoothTransition, move_type, action, action_chance FROM waypoint_data ORDER BY id, point");
 
@@ -151,10 +156,10 @@ void WaypointMgr::LoadWaypointAddons()
 
 void WaypointMgr::ReloadPath(uint32 id)
 {
-    auto itr = _waypointStore.find(id);
-    if (itr != _waypointStore.end())
-        _waypointStore.erase(itr);
-
+    // Never erase the path: every creature walking it keeps a raw WaypointPath pointer in its
+    // WaypointMovementGenerator (i_path), and erasing left them all dangling - the next StartMove read freed
+    // memory and crashed the map thread. The nodes are replaced in place instead; unordered_map nodes never
+    // move, so those pointers stay valid. (Commands run on the world thread while the map threads are idle.)
     WorldDatabasePreparedStatement* stmt = WorldDatabase.GetPreparedStatement(WORLD_SEL_WAYPOINT_DATA_BY_ID);
 
     stmt->SetData(0, id);
@@ -162,7 +167,12 @@ void WaypointMgr::ReloadPath(uint32 id)
     PreparedQueryResult result = WorldDatabase.Query(stmt);
 
     if (!result)
+    {
+        auto itr = _waypointStore.find(id);
+        if (itr != _waypointStore.end())
+            itr->second.Nodes.clear();
         return;
+    }
 
     std::vector<WaypointNode> values;
     do
@@ -204,5 +214,7 @@ void WaypointMgr::ReloadPath(uint32 id)
         values.push_back(std::move(waypoint));
     } while (result->NextRow());
 
-    _waypointStore[id] = WaypointPath(id, std::move(values));
+    WaypointPath& path = _waypointStore[id];
+    path.Id = id;
+    path.Nodes = std::move(values);
 }
