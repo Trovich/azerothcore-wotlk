@@ -1427,6 +1427,62 @@ CheckGameObjectLoS = 1
 CheckM2LoSForSpells = 1
 
 #
+#    PathGameObjectObstacles.Enable
+#        Description: Make generated paths (chase, follow, flee, return home, charge, bot movement)
+#                     go round spawned gameobjects that have collision. Movement maps only know the
+#                     terrain and the buildings baked into the map, so without this a creature runs
+#                     straight through a spawned sarcophagus, crate or ore vein.
+#                     Doors, transports, destructible buildings and WMO gameobjects (bridges, houses)
+#                     never count. A path that starts or ends inside an object ignores that object.
+#                     When no way round is found the path is left as it was.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled, stock behaviour)
+
+PathGameObjectObstacles.Enable = 1
+
+#
+#    PathGameObjectObstacles.Players
+#        Description: Also apply it to paths generated for players: playerbots, charges, fear.
+#        Default:     1 - (Enabled)
+#                     0 - (Disabled, creatures and pets only)
+
+PathGameObjectObstacles.Players = 1
+
+#
+#    PathGameObjectObstacles.MinFootprint
+#    PathGameObjectObstacles.MaxFootprint
+#    PathGameObjectObstacles.MinHeight
+#        Description: Size limits in yards for a gameobject to count as an obstacle, taken from its
+#                     collision model and scale. Footprint is the longer side of the model on the
+#                     ground. Smaller or lower objects are walked over, larger ones are scenery.
+#                     Read when a gameobject is added to the map: changing them needs a restart.
+#        Default:     2  - (PathGameObjectObstacles.MinFootprint)
+#                     30 - (PathGameObjectObstacles.MaxFootprint)
+#                     1  - (PathGameObjectObstacles.MinHeight)
+
+PathGameObjectObstacles.MinFootprint = 2
+PathGameObjectObstacles.MaxFootprint = 30
+PathGameObjectObstacles.MinHeight = 1
+
+#
+#    PathGameObjectObstacles.ScanDistance
+#        Description: How many yards of a path, counted from its start, are checked for obstacles.
+#                     The rest is left as generated.
+#        Default:     60 - (First 60 yards)
+#                     0  - (Whole path)
+
+PathGameObjectObstacles.ScanDistance = 60
+
+#
+#    PathGameObjectObstacles.ExcludeEntries
+#        Description: Comma separated gameobject entries that never count as obstacles.
+#                     Read once at startup.
+#        Example:     "184999,181556"
+#        Default:     ""
+
+PathGameObjectObstacles.ExcludeEntries = ""
+
+#
 #    PreloadAllNonInstancedMapGrids
 #        Description: Preload all grids on all non-instanced maps. This will take a great amount
 #                     of additional RAM (ca. 9 GB) and causes the server to take longer to start,

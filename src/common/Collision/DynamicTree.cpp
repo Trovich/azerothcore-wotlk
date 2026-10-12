@@ -170,6 +170,30 @@ private:
     VMAP::ModelIgnoreFlags _ignoreFlags;
 };
 
+struct DynamicTreeHitModelCallback
+{
+    DynamicTreeHitModelCallback(uint32 phaseMask) : _phaseMask(phaseMask), _hitModel(nullptr) { }
+
+    bool operator()(G3D::Ray const& r, GameObjectModel const& obj, float& distance, bool stopAtFirstHit)
+    {
+        // a hit always shortens the distance, so the last model that reports one is the nearest
+        if (!obj.intersectRay(r, distance, stopAtFirstHit, _phaseMask, VMAP::ModelIgnoreFlags::Nothing))
+            return false;
+
+        _hitModel = &obj;
+        return true;
+    }
+
+    [[nodiscard]] GameObjectModel const* GetHitModel() const
+    {
+        return _hitModel;
+    }
+
+private:
+    uint32 _phaseMask;
+    GameObjectModel const* _hitModel;
+};
+
 struct DynamicTreeLocationInfoCallback
 {
     DynamicTreeLocationInfoCallback(uint32 phaseMask)
@@ -252,6 +276,20 @@ bool DynamicMapTree::GetObjectHitPos(const uint32 phasemask, G3D::Vector3 const&
         result = false;
     }
     return result;
+}
+
+GameObjectModel const* DynamicMapTree::GetHitModel(uint32 phasemask, G3D::Vector3 const& startPos, G3D::Vector3 const& endPos) const
+{
+    float maxDist = (endPos - startPos).magnitude();
+    // prevent NaN values which can cause BIH intersection to enter infinite loop
+    if (maxDist < 1e-10f)
+        return nullptr;
+
+    G3D::Ray ray(startPos, (endPos - startPos) / maxDist);
+    DynamicTreeHitModelCallback callback(phasemask);
+    impl->intersectRay(ray, callback, maxDist, endPos, false);
+
+    return callback.GetHitModel();
 }
 
 bool DynamicMapTree::isInLineOfSight(float x1, float y1, float z1, float x2, float y2, float z2, uint32 phasemask, VMAP::ModelIgnoreFlags ignoreFlags) const

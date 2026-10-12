@@ -2618,8 +2618,13 @@ bool Creature::_IsTargetAcceptable(Unit const* target) const
 {
     ASSERT(target);
 
-    // if the target cannot be attacked, the target is not acceptable
-    if (IsFriendlyTo(target) || !target->isTargetableForAttack(false, this) || (m_vehicle && (IsOnVehicle(target) || m_vehicle->GetBase()->IsOnVehicle(target))))
+    // if the target cannot be attacked, the target is not acceptable.
+    // "Friendly" does not count when the target is hostile to me: my friendliness may come from a broad group
+    // mask only (the Scourge template 21 is friendly to every monster), while the target's faction names mine
+    // as an enemy (Scarlet Crusade template 89 -> Scourge). CombatManager::CanBeginCombat already lets that
+    // fight start; without the same exception here the threat reference stayed offline and the Scourge of
+    // the Plaguelands stood still while Scarlets killed it.
+    if ((IsFriendlyTo(target) && !target->IsHostileTo(this)) || !target->isTargetableForAttack(false, this) || (m_vehicle && (IsOnVehicle(target) || m_vehicle->GetBase()->IsOnVehicle(target))))
         return false;
 
     if (target->HasUnitState(UNIT_STATE_DIED))
@@ -3568,12 +3573,15 @@ void Creature::SetObjectScale(float scale)
     Unit::SetObjectScale(scale);
 
     float combatReach = DEFAULT_WORLD_OBJECT_SIZE;
+    SetCombatReachFront(0.0f);
 
     if (CreatureModelInfo const* minfo = sObjectMgr->GetCreatureModelInfo(GetDisplayId()))
     {
         SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS, (IsPet() ? 1.0f : minfo->bounding_radius) * scale);
         if (minfo->combat_reach > 0)
             combatReach = minfo->combat_reach;
+        if (!IsPet())
+            SetCombatReachFront(minfo->combat_reach_front * scale);
     }
 
     if (IsPet())
@@ -3598,7 +3606,7 @@ void Creature::SetDisplayId(uint32 modelId, float displayScale /*= 1.f*/)
     if (IsPet())
         combatReach = DEFAULT_COMBAT_REACH;
 
-    SetObjectScale(displayScale);
+    SetObjectScale(displayScale); // sets the front reach of the new model as well
 
     SetFloatValue(UNIT_FIELD_COMBATREACH, combatReach * GetObjectScale());
 }

@@ -8277,7 +8277,10 @@ bool Spell::CheckEffectTarget(Unit const* target, uint32 eff) const
         case SPELL_AURA_MOD_CHARM:
         case SPELL_AURA_MOD_POSSESS_PET:
         case SPELL_AURA_AOE_CHARM:
-            if (target->IsCreature() && target->IsVehicle())
+            // a hunter's own pet stays his to guide (Eyes of the Beast) while it carries prey in its claws:
+            // a gargoyle holding somebody (Gargoyle's Grip) is a vehicle for that time
+            if (target->IsCreature() && target->IsVehicle() &&
+                !(m_spellInfo->Effects[eff].ApplyAuraName == SPELL_AURA_MOD_POSSESS_PET && target->IsPet()))
                 return false;
             if (target->IsMounted() && m_spellInfo->Effects[eff].ApplyAuraName != SPELL_AURA_MOD_POSSESS)
                 return false;

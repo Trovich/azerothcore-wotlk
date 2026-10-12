@@ -638,6 +638,7 @@ typedef std::unordered_map<uint32, uint32> PacketCooldowns;
 // delay time next attack to prevent client attack animation problems
 #define ATTACK_DISPLAY_DELAY 200
 #define MAX_PLAYER_STEALTH_DETECT_RANGE 30.0f               // max distance for detection targets by player
+#define ABSOLUTE_STEALTH_VALUE 50000                        // stealth value from which no NPC detects the unit at all (see WorldObject::CanDetectStealthOf)
 
 enum class SpeedOpcodeIndex : uint32
 {
@@ -882,6 +883,10 @@ public:
     bool IsWithinCombatRange(Unit const* obj, float dist2compare) const;
     bool IsWithinMeleeRange(Unit const* obj, float dist = 0.f) const;
     float GetMeleeRange(Unit const* target) const;
+    // Combat reach in the direction of `other`. The same as GetCombatReach() unless the unit's model has a
+    // reach of its own for what is in front of it (creature_model_reach).
+    [[nodiscard]] float GetCombatReachToward(Unit const* other) const;
+    void SetCombatReachFront(float reach) { m_combatReachFront = reach; }
 
     void setAttackTimer(WeaponAttackType type, int32 time) { m_attackTimer[type] = time; }  /// @todo - Look to convert to std::chrono
     void resetAttackTimer(WeaponAttackType type = BASE_ATTACK);
@@ -2252,6 +2257,8 @@ private:
 
     bool m_cleanupDone; // lock made to not add stuff after cleanup before delete
     bool m_duringRemoveFromWorld; // lock made to not add stuff after begining removing from world
+
+    float m_combatReachFront = 0.0f; // scaled like UNIT_FIELD_COMBATREACH; 0 = none
 
     uint32 _oldFactionId;           ///< faction before charm
     bool _isWalkingBeforeCharm;     ///< Are we walking before we were charmed?

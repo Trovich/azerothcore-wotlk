@@ -64,6 +64,10 @@ public:
 
     [[nodiscard]] G3D::Vector3 const& GetPosition() const { return iPos; }
 
+    // The four corners of the model's bounding box on the ground, in world space and in winding order.
+    // Unlike GetBounds() this box turns with the model.
+    [[nodiscard]] G3D::Vector3 const* GetFootprint() const { return iFootprint; }
+
     /** Enables\disables collision. */
     void disable() { phasemask = 0; }
     void enable(uint32 ph_mask) { phasemask = ph_mask; }
@@ -81,9 +85,11 @@ public:
 
 private:
     bool initialize(std::unique_ptr<GameObjectModelOwnerBase> modelOwner, std::string const& dataPath);
+    void UpdateFootprint(G3D::AABox const& scaledBox, G3D::Matrix3 const& rotation);
 
     uint32 phasemask{0};
     G3D::AABox iBound;
+    G3D::Vector3 iFootprint[4];
     G3D::Matrix3 iInvRot;
     G3D::Vector3 iPos;
     float iInvScale{0};

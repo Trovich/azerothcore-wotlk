@@ -230,6 +230,7 @@ public:
 
     void SetPhaseMask(uint32 newPhaseMask, bool update) override;
     void EnableCollision(bool enable);
+    [[nodiscard]] bool IsPathObstacle() const;          // generated paths go round it, see PathGenerator::AvoidDynamicObstacles
 
     GameObjectFlags GetGameObjectFlags() const { return GameObjectFlags(GetUInt32Value(GAMEOBJECT_FLAGS)); }
     bool HasGameObjectFlag(GameObjectFlags flags) const { return HasFlag(GAMEOBJECT_FLAGS, flags) != 0; }

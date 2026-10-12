@@ -402,6 +402,8 @@ void Player::Update(uint32 p_time)
         // != GetCharmGUID())))
         RemovePet(pet, PET_SAVE_NOT_IN_SLOT, true);
 
+    UpdateCompanionPet(p_time);
+
     if (m_hostileReferenceCheckTimer <= p_time)
     {
         m_hostileReferenceCheckTimer = 15000;
@@ -711,6 +713,58 @@ void Player::UpdateAllRatings()
 }
 
 // skill+step, checking for max value
+// A companion (non-combat pet) stays with its owner until the owner dies or dismisses it by hand; the player
+// should never have to summon it again after a taxi flight, a ride on a flying mount or a teleport.
+//
+// It used to get lost in three ways: the taxi handler despawns it at take-off, a map change removes every
+// controlled unit with the player, and on a flying mount (or any fast trip) it falls behind on the ground until
+// its grid unloads and takes it along. The player remembers the spell that summoned the companion
+// (Unit::SetMinion); it is forgotten on death (Player::setDeathState) and on a manual dismiss
+// (WorldSession::HandleDismissCritter). Once a second: a companion left more than 40 yd behind is brought to
+// its owner, a missing one is summoned again. Nothing happens while dead, in a taxi flight, during a teleport
+// or in an arena - the companion appears right after. Not saved to the DB: a relog needs a new summon.
+void Player::UpdateCompanionPet(uint32 diff)
+{
+    static constexpr uint32 CHECK_INTERVAL = 1000;
+    static constexpr uint32 RESUMMON_RETRY_INTERVAL = 5000;   // do not hammer a summon that keeps failing
+    static constexpr float MAX_DISTANCE = 40.0f;
+
+    if (!m_companionSpell)
+        return;
+
+    if (m_companionCheckTimer > diff)
+    {
+        m_companionCheckTimer -= diff;
+        return;
+    }
+
+    m_companionCheckTimer = CHECK_INTERVAL;
+
+    if (!IsAlive() || !IsInWorld() || IsBeingTeleported() || IsInFlight() || InArena())
+        return;
+
+    if (Creature* companion = GetCompanionPet())
+    {
+        // 2D: flying high above a companion that keeps up on the ground is fine
+        if (companion->GetExactDist2d(this) > MAX_DISTANCE)
+        {
+            float x, y, z;
+            GetClosePoint(x, y, z, companion->GetCombatReach(), PET_FOLLOW_DIST, MINI_PET_FOLLOW_ANGLE);
+            companion->UpdateAllowedPositionZ(x, y, z);
+            companion->NearTeleportTo(x, y, z, GetOrientation());
+        }
+
+        return;
+    }
+
+    m_companionCheckTimer = RESUMMON_RETRY_INTERVAL;
+    CastSpell(this, m_companionSpell, true);
+}
+
+// 130740 Fast Learner (Human racial passive, custom): all skills - weapon, defense, professions - are
+// gained twice as fast. Both skill-up paths below double their step for it.
+static constexpr uint32 SPELL_HUMAN_FAST_LEARNER = 130740;
+
 bool Player::UpdateSkill(uint32 skill_id, uint32 step)
 {
     if (!skill_id || !sScriptMgr->OnPlayerCanUpdateSkill(this, skill_id))
@@ -726,6 +780,10 @@ bool Player::UpdateSkill(uint32 skill_id, uint32 step)
     uint32 max        = SKILL_MAX(data);
 
     sScriptMgr->OnPlayerBeforeUpdateSkill(this, skill_id, value, max, step);
+
+    // Humans' racial Fast Learner: every skill-up is worth two points
+    if (HasAura(SPELL_HUMAN_FAST_LEARNER))
+        step *= 2;
 
     if ((!max) || (!value) || (value >= max))
         return false;
@@ -961,6 +1019,10 @@ bool Player::UpdateSkillPro(uint16 SkillId, int32 Chance, uint32 step)
     uint32 MaxValue   = SKILL_MAX(data);
 
     sScriptMgr->OnPlayerBeforeUpdateSkill(this, SkillId, SkillValue, MaxValue, step);
+
+    // Humans' racial Fast Learner: every skill-up is worth two points
+    if (HasAura(SPELL_HUMAN_FAST_LEARNER))
+        step *= 2;
 
     if (!MaxValue || !SkillValue || SkillValue >= MaxValue)
         return false;

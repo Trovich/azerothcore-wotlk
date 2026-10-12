@@ -62,6 +62,7 @@ SmartAI::SmartAI(Creature* c) : CreatureAI(c)
     mEscortInvokerCheckTimer = 1000;
     mFollowDist = 0;
     mFollowAngle = 0;
+    mFollowFormation = false;
     mFollowCredit = 0;
     mFollowArrivedEntry = 0;
     mFollowCreditType = 0;
@@ -793,7 +794,7 @@ void SmartAI::EnterEvadeMode(EvadeReason why)
     else if (mFollowGuid)
     {
         if (Unit* target = ObjectAccessor::GetUnit(*me, mFollowGuid))
-            me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle);
+            StartFollowMovement(target, true);
         me->ClearUnitState(UNIT_STATE_EVADE);
 
         // xinef: do not forget to reset scripts as we wont call reached home
@@ -892,6 +893,7 @@ void SmartAI::JustRespawned()
     mFollowGuid.Clear();//do not reset follower on Reset(), we need it after combat evade
     mFollowDist = 0;
     mFollowAngle = 0;
+    mFollowFormation = false;
     mFollowCredit = 0;
     mFollowArrivedTimer = 1000;
     mFollowArrivedEntry = 0;
@@ -1333,7 +1335,25 @@ void SmartAI::DistancingStarted()
     _isDistancing = true;
 }
 
-void SmartAI::SetFollow(Unit* target, float dist, float angle, uint32 credit, uint32 end, uint32 creditType, bool aliveState)
+void SmartAI::StartFollowMovement(Unit* target, bool resumed)
+{
+    // A slot in formation with a walking NPC: FormationMovementGenerator aims at where the leader's spline
+    // will take it and matches its pace, so the leader stays in the middle of its followers. MoveFollow
+    // re-paths only once a creature target has moved 2 * dist away from where it was, so its followers
+    // trail a couple of yards behind the leader.
+    if (mFollowFormation)
+        me->GetMotionMaster()->MoveFormation(target, mFollowDist, mFollowAngle, 0, 0);
+    else if (resumed)
+        me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle);
+    // inheritSpeed true: the follower syncs to whatever the target is actually doing (walk, run, or
+    // mid-turn spline velocity) instead of always using its own fixed walk speed. Without it a
+    // follower that fell behind on a turn - e.g. Miss Danna's orphans keeping their fan formation as
+    // she walks a winding path - never closed the gap and the formation dragged out of shape.
+    else
+        me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle, MOTION_SLOT_ACTIVE, true, true);
+}
+
+void SmartAI::SetFollow(Unit* target, float dist, float angle, uint32 credit, uint32 end, uint32 creditType, bool aliveState, bool formation)
 {
     if (!target)
     {
@@ -1350,11 +1370,8 @@ void SmartAI::SetFollow(Unit* target, float dist, float angle, uint32 credit, ui
     mFollowArrivedEntry = end;
     mFollowArrivedAlive = !aliveState; // negate - 0 is alive
     mFollowCreditType = creditType;
-    // inheritSpeed true: the follower syncs to whatever the target is actually doing (walk, run, or
-    // mid-turn spline velocity) instead of always using its own fixed walk speed. Without it a
-    // follower that fell behind on a turn - e.g. Miss Danna's orphans keeping their fan formation as
-    // she walks a winding path - never closed the gap and the formation dragged out of shape.
-    me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle, MOTION_SLOT_ACTIVE, true, true);
+    mFollowFormation = formation && target->IsCreature();
+    StartFollowMovement(target, false);
 }
 
 void SmartAI::StopFollow(bool complete)
@@ -1379,6 +1396,7 @@ void SmartAI::StopFollow(bool complete)
     mFollowGuid.Clear();
     mFollowDist = 0;
     mFollowAngle = 0;
+    mFollowFormation = false;
     mFollowCredit = 0;
     mFollowArrivedTimer = 1000;
     mFollowArrivedEntry = 0;

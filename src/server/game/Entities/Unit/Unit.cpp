@@ -811,8 +811,23 @@ bool Unit::IsWithinMeleeRange(Unit const* obj, float dist) const
 
 float Unit::GetMeleeRange(Unit const* target) const
 {
-    float range = GetCombatReach() + target->GetCombatReach() + 4.0f / 3.0f;
+    float range = GetCombatReachToward(target) + target->GetCombatReachToward(this) + 4.0f / 3.0f;
     return std::max(range, NOMINAL_MELEE_RANGE);
+}
+
+float Unit::GetCombatReachToward(Unit const* other) const
+{
+    float const rear = GetCombatReach();
+    if (m_combatReachFront <= 0.0f || m_combatReachFront == rear || other == this)
+        return rear;
+
+    // The reach is a circle that ends m_combatReachFront ahead of the unit and GetCombatReach() behind it:
+    // its centre lies `shift` behind the unit's position. This is how far it extends towards `other`.
+    // UNIT_FIELD_COMBATREACH (what the client knows) stays the larger, rear value.
+    float const radius = (rear + m_combatReachFront) / 2.0f;
+    float const shift = (rear - m_combatReachFront) / 2.0f;
+    float const cosAngle = std::cos(GetRelativeAngle(other));
+    return -shift * cosAngle + std::sqrt(radius * radius - shift * shift * (1.0f - cosAngle * cosAngle));
 }
 
 bool Unit::IsWithinRange(Unit const* obj, float dist) const
@@ -3562,6 +3577,28 @@ float Unit::GetUnitParryChance() const
     return chance > 0.0f ? chance : 0.0f;
 }
 
+// Total of the "attackers' chance to hit you" auras. The Night Elf racial Quickness (20582, -10% on this
+// server) does not stack with the other reductions of the same kind (Arctic Winds, Frigid Dreadplate, ...):
+// of Quickness and the sum of the others only the stronger one counts. Effects that RAISE the attackers'
+// chance to hit still apply against it in full.
+static float GetAttackerHitChanceModifier(Unit const* unit, AuraType auraType)
+{
+    static constexpr uint32 SPELL_QUICKNESS = 20582;
+
+    float total = float(unit->GetTotalAuraModifier(auraType));
+
+    float quickness = 0.0f;
+    for (AuraEffect const* aurEff : unit->GetAuraEffectsByType(auraType))
+        if (aurEff->GetId() == SPELL_QUICKNESS)
+            quickness += float(aurEff->GetAmount());
+
+    if (quickness >= 0.0f)
+        return total;
+
+    float const others = total - quickness;
+    return others < 0.0f ? std::min(quickness, others) : quickness + others;
+}
+
 float Unit::GetUnitMissChance(WeaponAttackType attType) const
 {
     float miss_chance = 5.00f;
@@ -3570,9 +3607,9 @@ float Unit::GetUnitMissChance(WeaponAttackType attType) const
         miss_chance += player->GetMissPercentageFromDefence();
 
     if (attType == RANGED_ATTACK)
-        miss_chance -= GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_RANGED_HIT_CHANCE);
+        miss_chance -= GetAttackerHitChanceModifier(this, SPELL_AURA_MOD_ATTACKER_RANGED_HIT_CHANCE);
     else
-        miss_chance -= GetTotalAuraModifier(SPELL_AURA_MOD_ATTACKER_MELEE_HIT_CHANCE);
+        miss_chance -= GetAttackerHitChanceModifier(this, SPELL_AURA_MOD_ATTACKER_MELEE_HIT_CHANCE);
 
     return miss_chance;
 }
@@ -7602,6 +7639,10 @@ void Unit::SetMinion(Minion* minion, bool apply)
         if (minion->m_Properties && minion->m_Properties->Type == SUMMON_TYPE_MINIPET)
         {
             SetCritterGUID(minion->GetGUID());
+
+            // remembered so that the companion survives flights, mounts and teleports (Player::UpdateCompanionPet)
+            if (Player* player = ToPlayer())
+                player->SetCompanionSpell(minion->GetUInt32Value(UNIT_CREATED_BY_SPELL));
         }
 
         // PvP, FFAPvP
@@ -9776,6 +9817,12 @@ bool Unit::IsImmunedToSpell(SpellInfo const* spellInfo, Unit const* caster, Spel
     {
         SpellImmuneContainer const& mechanicList = m_spellImmune[IMMUNITY_MECHANIC];
         if (mechanicList.count(mechanic) > 0)
+            return true;
+
+        // The type rule of IsImmunedToBleed() for the bleeds that carry the mechanic on the spell itself and not
+        // on an effect - most of them: Rupture, Garrote, Rip, Deep Wounds, the Rend and Rake of creatures. Those
+        // never reach the same check in IsImmunedToSpellEffect, so without this the undead bled from them.
+        if (mechanic == MECHANIC_BLEED && IsImmunedToBleed())
             return true;
     }
 

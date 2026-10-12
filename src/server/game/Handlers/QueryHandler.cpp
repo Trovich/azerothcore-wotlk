@@ -15,6 +15,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "Battleground.h"
 #include "Common.h"
 #include "GameTime.h"
 #include "Log.h"
@@ -47,6 +48,18 @@ void WorldSession::SendNameQueryOpcode(ObjectGuid guid)
     nameQueryResponse.NameUnknown = false;
     nameQueryResponse.Name = playerData->Name;
     nameQueryResponse.Race = player ? player->getRace() : playerData->Race;
+
+    // The battleground scoreboard has no team field: the client files each row under the faction of the race it got
+    // here. A cross-faction player who keeps his own race would be listed with the side he was born to, not the one
+    // he fights for, so the score table would show the players' factions instead of the two teams. Inside a
+    // battleground, report a race of the team he plays for.
+    if (player && player->InBattleground())
+    {
+        Battleground const* bg = player->GetBattleground();
+        TeamId const bgTeam = player->GetBgTeamId();
+        if (bg && !bg->isArena() && Player::TeamIdForRace(nameQueryResponse.Race) != bgTeam)
+            nameQueryResponse.Race = bgTeam == TEAM_ALLIANCE ? RACE_HUMAN : RACE_ORC;
+    }
     nameQueryResponse.Sex = player ? player->getGender() : playerData->Sex;
     nameQueryResponse.Class = player ? player->getClass() : playerData->Class;
 

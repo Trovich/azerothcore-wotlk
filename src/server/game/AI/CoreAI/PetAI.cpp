@@ -716,6 +716,11 @@ bool PetAI::CanAttack(Unit* target, SpellInfo const* spellInfo)
     if (!target)
         return false;
 
+    // never what it carries itself (Gargoyle's Grip: the prey rides the pet): chasing or facing its own
+    // passenger makes the pet spin on the spot
+    if (target->GetVehicleBase() == me)
+        return false;
+
     if (!target->IsAlive())
     {
         // xinef: if target is invalid, pet should evade automaticly

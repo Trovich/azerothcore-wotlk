@@ -437,7 +437,10 @@ void Map::UpdatePlayerZoneStats(uint32 oldZone, uint32 newZone)
 void Map::Update(const uint32 t_diff, const uint32 s_diff, bool  /*thread*/)
 {
     if (t_diff)
+    {
         _mapCollisionData.GetDynamicTree().update(t_diff);
+        _mapCollisionData.GetPathObstacleTree().update(t_diff);
+    }
 
     // Update world sessions and players
     for (m_mapRefIter = m_mapRefMgr.begin(); m_mapRefIter != m_mapRefMgr.end(); ++m_mapRefIter)

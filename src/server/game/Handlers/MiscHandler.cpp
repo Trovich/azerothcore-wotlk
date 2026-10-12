@@ -1524,6 +1524,19 @@ void WorldSession::HandleMoveFlagChangeOpcode(WorldPacket& recv_data)
     Unit* mover = _player->m_mover;
     Player* plrMover = mover->ToPlayer();
 
+    // The ACK must be for the unit this client moves right now. A player driving a vehicle can
+    // still get a flag change on himself (feather fall / parachute on the seated driver): its ACK
+    // carries the PLAYER's guid and movement info, and applying that to the mover would relocate
+    // the vehicle with the driver's data and broadcast the driver as a free-standing unit.
+    if (guid != mover->GetGUID())
+    {
+        if (opcode == CMSG_MOVE_SET_CAN_FLY_ACK && _player->GetPendingFlightChange() == counter)
+            _player->SetPendingFlightChange(false);
+
+        recv_data.rfinish(); // prevent warnings spam
+        return;
+    }
+
     mover->m_movementInfo.flags = movementInfo.GetMovementFlags();
 
     // old map - async processing, ignore

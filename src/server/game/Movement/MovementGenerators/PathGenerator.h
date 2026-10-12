@@ -26,6 +26,8 @@
 #include "SharedDefines.h"
 #include <G3D/Vector3.h>
 
+class DynamicMapTree;
+class GameObjectModel;
 class Unit;
 class WorldObject;
 
@@ -198,6 +200,17 @@ class PathGenerator
                               float* smoothPath, int* smoothPathSize, uint32 smoothPathMaxSize);
 
         void AddFarFromPolyFlags(bool startFarFromPoly, bool endFarFromPoly);
+
+        // spawned gameobjects are not part of the navmesh: bend the finished path round the ones in its way
+        void AvoidDynamicObstacles();
+        bool DetourAroundObstacle(DynamicMapTree const& tree, GameObjectModel const* obstacle, std::size_t hitSegment,
+                                  std::vector<GameObjectModel const*> const& ignored, std::size_t& resumeIndex);
+        bool ValidateDetour(DynamicMapTree const& tree, std::vector<GameObjectModel const*> const& ignored, Movement::PointsArray& route) const;
+        GameObjectModel const* FindObstacle(DynamicMapTree const& tree, std::vector<GameObjectModel const*> const& ignored,
+                                            G3D::Vector3 const& from, G3D::Vector3 const& to) const;
+
+        GameObjectModel const* _lastObstacle;   // the last object a detour was built for, only ever compared
+        bool _lastObstacleLeft;                 // and the side it was passed on, so that repeated chase paths do not flip sides
 };
 
 #endif

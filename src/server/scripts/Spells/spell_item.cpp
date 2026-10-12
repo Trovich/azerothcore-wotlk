@@ -1702,7 +1702,7 @@ class spell_item_blessing_of_ancient_kings : public AuraScript
 };
 
 // 8342  - Defibrillate (Goblin Jumper Cables) have 33% chance on success
-// 22999 - Defibrillate (Goblin Jumper Cables XL) have 50% chance on success
+// 22999 - Defibrillate (Goblin Jumper Cables XL) have 100% chance on success (World of Trovich; stock: 50%)
 // 54732 - Defibrillate (Gnomish Army Knife) have 67% chance on success
 enum Defibrillate
 {
@@ -6108,7 +6108,7 @@ void AddSC_item_spell_scripts()
     RegisterSpellScript(spell_item_blessing_of_ancient_kings);
     RegisterSpellScript(spell_item_valanyr_hammer_of_ancient_kings);
     RegisterSpellScriptWithArgs(spell_item_defibrillate, "spell_item_goblin_jumper_cables", 67, SPELL_GOBLIN_JUMPER_CABLES_FAIL);
-    RegisterSpellScriptWithArgs(spell_item_defibrillate, "spell_item_goblin_jumper_cables_xl", 50, SPELL_GOBLIN_JUMPER_CABLES_XL_FAIL);
+    RegisterSpellScriptWithArgs(spell_item_defibrillate, "spell_item_goblin_jumper_cables_xl", 0, SPELL_GOBLIN_JUMPER_CABLES_XL_FAIL); // fail chance
     RegisterSpellScriptWithArgs(spell_item_defibrillate, "spell_item_gnomish_army_knife", 33);
     RegisterSpellScript(spell_item_desperate_defense);
     RegisterSpellScript(spell_item_deviate_fish);

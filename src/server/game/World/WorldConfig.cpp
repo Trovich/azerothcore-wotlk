@@ -647,6 +647,15 @@ void WorldConfig::BuildConfigCache()
     SetConfigValue<bool>(CONFIG_CHECK_GOBJECT_LOS, "CheckGameObjectLoS", true);
     SetConfigValue<bool>(CONFIG_CHECK_M2_LOS_FOR_SPELLS, "CheckM2LoSForSpells", true);
 
+    // Paths going round spawned gameobjects
+    SetConfigValue<bool>(CONFIG_PATH_GO_OBSTACLES_ENABLE, "PathGameObjectObstacles.Enable", true);
+    SetConfigValue<bool>(CONFIG_PATH_GO_OBSTACLES_PLAYERS, "PathGameObjectObstacles.Players", true);
+    SetConfigValue<float>(CONFIG_PATH_GO_OBSTACLES_MIN_FOOTPRINT, "PathGameObjectObstacles.MinFootprint", 2.0f);
+    SetConfigValue<float>(CONFIG_PATH_GO_OBSTACLES_MAX_FOOTPRINT, "PathGameObjectObstacles.MaxFootprint", 30.0f);
+    SetConfigValue<float>(CONFIG_PATH_GO_OBSTACLES_MIN_HEIGHT, "PathGameObjectObstacles.MinHeight", 1.0f);
+    SetConfigValue<float>(CONFIG_PATH_GO_OBSTACLES_SCAN_DISTANCE, "PathGameObjectObstacles.ScanDistance", 60.0f);
+    SetConfigValue<std::string>(CONFIG_PATH_GO_OBSTACLES_EXCLUDE_ENTRIES, "PathGameObjectObstacles.ExcludeEntries", "");
+
     SetConfigValue<bool>(CONFIG_CALCULATE_CREATURE_ZONE_AREA_DATA, "Calculate.Creature.Zone.Area.Data", false);
     SetConfigValue<bool>(CONFIG_CALCULATE_GAMEOBJECT_ZONE_AREA_DATA, "Calculate.Gameoject.Zone.Area.Data", false);
 

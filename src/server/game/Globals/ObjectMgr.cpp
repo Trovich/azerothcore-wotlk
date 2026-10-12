@@ -1739,6 +1739,7 @@ void ObjectMgr::LoadCreatureModelInfo()
 
         modelInfo.bounding_radius      = fields[1].Get<float>();
         modelInfo.combat_reach         = fields[2].Get<float>();
+        modelInfo.combat_reach_front   = 0.0f;
         modelInfo.gender               = fields[3].Get<uint8>();
         modelInfo.modelid_other_gender = fields[4].Get<uint32>();
         modelInfo.is_trigger           = false;
@@ -1777,6 +1778,25 @@ void ObjectMgr::LoadCreatureModelInfo()
 
         ++count;
     } while (result->NextRow());
+
+    // Models whose origin is not in the middle of the body (a clefthoof's is at its shoulders, the body
+    // stretches twice as far back as forward): their own reach for what stands in front of them.
+    // See Unit::GetCombatReachToward.
+    if (QueryResult reachResult = WorldDatabase.Query("SELECT DisplayID, CombatReachFront FROM creature_model_reach"))
+    {
+        do
+        {
+            Field* fields = reachResult->Fetch();
+            auto itr = _creatureModelStore.find(fields[0].Get<uint32>());
+            if (itr == _creatureModelStore.end())
+            {
+                LOG_ERROR("sql.sql", "Table `creature_model_reach` has display id ({}) that is not in `creature_model_info`, skipped.", fields[0].Get<uint32>());
+                continue;
+            }
+
+            itr->second.combat_reach_front = fields[1].Get<float>();
+        } while (reachResult->NextRow());
+    }
 
     LOG_INFO("server.loading", ">> Loaded {} Creature Model Based Info in {} ms", count, GetMSTimeDiffToNow(oldMSTime));
     LOG_INFO("server.loading", " ");

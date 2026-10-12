@@ -1038,6 +1038,13 @@ class spell_hun_tame_beast : public SpellScript
                 return SPELL_FAILED_DONT_REPORT;
             }
 
+            // the dead and the demonic bend only to the Forsaken
+            if (target->GetCreatureTemplate()->IsForsakenOnlyTame() && player->getRace() != RACE_UNDEAD_PLAYER && !player->IsGameMaster())
+            {
+                player->SendTameFailure(PET_TAME_NOT_TAMEABLE);
+                return SPELL_FAILED_DONT_REPORT;
+            }
+
             PetStable const* petStable = player->GetPetStable();
             if (petStable)
             {

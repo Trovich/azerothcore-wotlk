@@ -427,6 +427,10 @@ void WorldSession::SynchronizeMovement(MovementInfo& movementInfo)
     }
 }
 
+// A player who falls out of the world is laid where he last stood on the ground if that is no further than
+// this (2D, yd) from where the fall ended. A fall drifts some 150 yd at most (mounted, from the highest rims).
+static constexpr float VOID_FALL_BODY_RETURN_DIST = 300.0f;
+
 void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo, Unit* mover)
 {
     SynchronizeMovement(movementInfo);
@@ -518,6 +522,26 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo, Unit* mover
                     // player can be alive if GM
                     if (plrMover->IsAlive())
                         plrMover->KillPlayer();
+
+                    // The body hangs below the world where nobody can reach it, and the client may offer no
+                    // Release Spirit button there (Outland's lower bound runs right under the rim, so death
+                    // comes at the edge, in mid-fall).
+                    if (!plrMover->IsAlive() && !plrMover->GetMap()->Instanceable())
+                    {
+                        if (plrMover->getDeathState() == DeathState::JustDied)
+                            plrMover->KillPlayer();
+
+                        // Put the body back where the player last stood before the fall - the edge he
+                        // stepped off. From there it is an ordinary death: release, run back as a ghost.
+                        WorldLocation const& ground = plrMover->GetLastGroundPosition();
+                        if (ground.GetMapId() == plrMover->GetMapId() && plrMover->GetExactDist2d(&ground) <= VOID_FALL_BODY_RETURN_DIST)
+                            plrMover->NearTeleportTo(ground.GetPositionX(), ground.GetPositionY(), ground.GetPositionZ(), ground.GetOrientation());
+                        // No such place near (dismounted in flight far from land): do what the button would
+                        // do. Player::RepopAtGraveyard() brings a player from below the map back to life at
+                        // the nearest graveyard - no corpse to run to.
+                        else
+                            plrMover->RepopAtGraveyard();
+                    }
                 }
                 // Rescue only released ghosts: teleporting an unreleased body would move the corpse
                 // out of instances (e.g. Eye of Eternity platform destruction, issue #25757).
@@ -525,6 +549,10 @@ void WorldSession::HandleMoverRelocation(MovementInfo& movementInfo, Unit* mover
                     plrMover->RepopAtGraveyard();
             }
         }
+        else if (plrMover->IsAlive() && !plrMover->GetTransport() && !plrMover->GetVehicle() &&
+            !movementInfo.HasMovementFlag(MOVEMENTFLAG_FALLING | MOVEMENTFLAG_FALLING_FAR | MOVEMENTFLAG_FLYING |
+                MOVEMENTFLAG_DISABLE_GRAVITY | MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_ONTRANSPORT))
+            plrMover->SetLastGroundPosition(movementInfo.pos);
     }
 }
 

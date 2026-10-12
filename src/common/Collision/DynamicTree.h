@@ -54,6 +54,9 @@ public:
                          G3D::Vector3 const& pPos2, G3D::Vector3& pResultHitPos,
                          float pModifyDist) const;
 
+    // The nearest model the segment runs into, nullptr if there is none
+    [[nodiscard]] GameObjectModel const* GetHitModel(uint32 phasemask, G3D::Vector3 const& startPos, G3D::Vector3 const& endPos) const;
+
     [[nodiscard]] float getHeight(float x, float y, float z, float maxSearchDist, uint32 phasemask) const;
 
     void insert(GameObjectModel const&);

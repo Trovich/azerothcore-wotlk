@@ -70,7 +70,7 @@ public:
     void SetMainSpell(uint32 spellId);
     void DistanceYourself(float range);
     bool KeepDistance(Unit* victim);
-    void SetFollow(Unit* target, float dist = 0.0f, float angle = 0.0f, uint32 credit = 0, uint32 end = 0, uint32 creditType = 0, bool aliveState = true);
+    void SetFollow(Unit* target, float dist = 0.0f, float angle = 0.0f, uint32 credit = 0, uint32 end = 0, uint32 creditType = 0, bool aliveState = true, bool formation = false);
     void StopFollow(bool complete);
 
     void SetScript9(SmartScriptHolder& e, uint32 entry, WorldObject* invoker);
@@ -240,6 +240,9 @@ private:
     ObjectGuid mFollowGuid;
     float mFollowDist;
     float mFollowAngle;
+    bool mFollowFormation; // keeps a formation slot beside a creature instead of trailing it (StartFollowMovement)
+
+    void StartFollowMovement(Unit* target, bool resumed);
 
     void ReturnToLastOOCPos();
     void UpdatePath(const uint32 diff);

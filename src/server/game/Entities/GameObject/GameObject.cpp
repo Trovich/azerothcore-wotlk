@@ -32,6 +32,8 @@
 #include "PoolMgr.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
+#include "StringConvert.h"
+#include "Tokenize.h"
 #include "Transport.h"
 #include "UpdateFieldFlags.h"
 #include "World.h"
@@ -230,6 +232,8 @@ void GameObject::AddToWorld()
         {
             m_model->UpdatePosition();
             GetMap()->InsertGameObjectModel(*m_model);
+            if (IsPathObstacle())
+                GetMap()->InsertPathObstacleModel(*m_model);
         }
 
         EnableCollision(GetGoState() == GO_STATE_READY || IsTransport()); // pussywizard: this startOpen is unneeded here, collision depends entirely on GOState
@@ -255,8 +259,12 @@ void GameObject::RemoveFromWorld()
         RemoveFromOwner();
 
         if (m_model)
+        {
             if (GetMap()->ContainsGameObjectModel(*m_model))
                 GetMap()->RemoveGameObjectModel(*m_model);
+            if (GetMap()->ContainsPathObstacleModel(*m_model))
+                GetMap()->RemovePathObstacleModel(*m_model);
+        }
 
         if (Transport* transport = GetTransport())
             transport->RemovePassenger(this, true);
@@ -2871,12 +2879,83 @@ void GameObject::UpdateModel()
     if (!IsInWorld())
         return;
     if (m_model)
+    {
         if (GetMap()->ContainsGameObjectModel(*m_model))
             GetMap()->RemoveGameObjectModel(*m_model);
+        if (GetMap()->ContainsPathObstacleModel(*m_model))
+            GetMap()->RemovePathObstacleModel(*m_model);
+    }
     delete m_model;
     m_model = CreateModel();
     if (m_model)
+    {
         GetMap()->InsertGameObjectModel(*m_model);
+        if (IsPathObstacle())
+            GetMap()->InsertPathObstacleModel(*m_model);
+    }
+}
+
+namespace
+{
+    std::unordered_set<uint32> const& GetPathObstacleExcludedEntries()
+    {
+        static std::unordered_set<uint32> const entries = []
+        {
+            std::unordered_set<uint32> result;
+            std::string_view const list = sWorld->getStringConfig(CONFIG_PATH_GO_OBSTACLES_EXCLUDE_ENTRIES);
+            for (std::string_view token : Acore::Tokenize(list, ',', false))
+            {
+                while (!token.empty() && token.front() == ' ')
+                    token.remove_prefix(1);
+                while (!token.empty() && token.back() == ' ')
+                    token.remove_suffix(1);
+                if (token.empty())
+                    continue;
+
+                if (Optional<uint32> entry = Acore::StringTo<uint32>(token))
+                    result.insert(*entry);
+                else
+                    LOG_ERROR("server.loading", "PathGameObjectObstacles.ExcludeEntries: '{}' is not a gameobject entry", token);
+            }
+            return result;
+        }();
+
+        return entries;
+    }
+}
+
+bool GameObject::IsPathObstacle() const
+{
+    if (!m_model)
+        return false;
+
+    // doors open, transports are stood on, WMO models are bridges and buildings rather than furniture
+    switch (GetGoType())
+    {
+        case GAMEOBJECT_TYPE_DOOR:
+        case GAMEOBJECT_TYPE_TRANSPORT:
+        case GAMEOBJECT_TYPE_MO_TRANSPORT:
+        case GAMEOBJECT_TYPE_DESTRUCTIBLE_BUILDING:
+        case GAMEOBJECT_TYPE_TRAPDOOR:
+            return false;
+        default:
+            break;
+    }
+
+    if (IsTransport() || m_model->IsMapObject())
+        return false;
+
+    G3D::Vector3 const* footprint = m_model->GetFootprint();
+    float const footprintSize = std::max((footprint[1] - footprint[0]).magnitude(), (footprint[3] - footprint[0]).magnitude());
+    G3D::AABox const& bounds = m_model->GetBounds();
+    float const height = bounds.high().z - bounds.low().z;
+
+    if (footprintSize < sWorld->getFloatConfig(CONFIG_PATH_GO_OBSTACLES_MIN_FOOTPRINT) ||
+        footprintSize > sWorld->getFloatConfig(CONFIG_PATH_GO_OBSTACLES_MAX_FOOTPRINT) ||
+        height < sWorld->getFloatConfig(CONFIG_PATH_GO_OBSTACLES_MIN_HEIGHT))
+        return false;
+
+    return !GetPathObstacleExcludedEntries().count(GetEntry());
 }
 
 Player* GameObject::GetLootRecipient() const
@@ -3162,12 +3241,19 @@ void GameObject::UpdateModelPosition()
     if (!m_model)
         return;
 
+    bool const isPathObstacle = GetMap()->ContainsPathObstacleModel(*m_model);
+    if (isPathObstacle)
+        GetMap()->RemovePathObstacleModel(*m_model);
+
     if (GetMap()->ContainsGameObjectModel(*m_model))
     {
         GetMap()->RemoveGameObjectModel(*m_model);
         m_model->UpdatePosition();
         GetMap()->InsertGameObjectModel(*m_model);
     }
+
+    if (isPathObstacle)
+        GetMap()->InsertPathObstacleModel(*m_model);
 }
 
 time_t GameObject::GetRespawnTimeEx() const

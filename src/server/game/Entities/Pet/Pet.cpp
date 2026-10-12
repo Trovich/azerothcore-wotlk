@@ -491,7 +491,8 @@ bool Pet::LoadPetFromDB(Player* owner, uint32 petEntry, uint32 petnumber, bool c
         }
 
         // must be after SetMinion (owner guid check)
-        LoadTemplateImmunities(0);
+        // a tamed undead or demon keeps what its kind is immune to (gargoyles: poison, bleeding); beasts keep nothing
+        LoadTemplateImmunities(GetCreatureTemplate()->IsForsakenOnlyTame() ? GetCreatureTemplate()->CreatureImmunitiesId : 0);
         //LoadMechanicTemplateImmunity();
         m_loading = false;
     });
@@ -1027,12 +1028,16 @@ bool Pet::CreateBaseAtTamed(CreatureTemplate const* cinfo, Map* map, uint32 phas
     SetUInt32Value(UNIT_FIELD_PETNEXTLEVELEXP, uint32(sObjectMgr->GetXPForLevel(GetLevel() + 1)* sWorld->getRate(RATE_XP_PET_NEXT_LEVEL)));
     ReplaceAllNpcFlags(UNIT_NPC_FLAG_NONE);
 
-    if (cinfo->type == CREATURE_TYPE_BEAST)
+    if (cinfo->type == CREATURE_TYPE_BEAST || cinfo->IsForsakenOnlyTame())
     {
         SetUInt32Value(UNIT_FIELD_BYTES_0, 0x02020100);
         SetSheath(SHEATH_STATE_MELEE);
         SetByteFlag(UNIT_FIELD_BYTES_2, 2, UNIT_CAN_BE_RENAMED | UNIT_CAN_BE_ABANDONED);
     }
+
+    // as on loading (LoadPetFromDB): a tamed undead or demon keeps the immunities of its kind
+    if (cinfo->IsForsakenOnlyTame())
+        LoadTemplateImmunities(cinfo->CreatureImmunitiesId);
 
     return true;
 }

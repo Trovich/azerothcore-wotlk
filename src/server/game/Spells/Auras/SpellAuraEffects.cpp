@@ -5342,6 +5342,15 @@ void AuraEffect::HandleAuraDummy(AuraApplication const* aurApp, uint8 mode, bool
                     case 30105:
                         finalSpelId = 30104;
                         break;
+                    // Any other taming rod (custom ones: the Forsaken and human hunter chains): the amount of
+                    // this dummy aura names the finishing spell - the convention the Blood Elf and Draenei
+                    // rods above follow in Spell.dbc already (30099 -> 30100, 30646 -> 30647).
+                    default:
+                        if (GetAmount() > 0)
+                            if (SpellInfo const* finalSpell = sSpellMgr->GetSpellInfo(uint32(GetAmount())))
+                                if (finalSpell->HasEffect(SPELL_EFFECT_QUEST_COMPLETE))
+                                    finalSpelId = finalSpell->Id;
+                        break;
                 }
 
                 if (finalSpelId)

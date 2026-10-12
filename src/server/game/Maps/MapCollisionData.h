@@ -81,6 +81,9 @@ public:
 
     DynamicVMapCollisionData& GetDynamicTree() { return _dynamicVMapData; }
     DynamicVMapCollisionData const& GetDynamicTree() const { return _dynamicVMapData; }
+    // The gameobject models that paths have to go round. They are in the dynamic tree as well.
+    DynamicMapTree& GetPathObstacleTree() { return _pathObstacleTree; }
+    DynamicMapTree const& GetPathObstacleTree() const { return _pathObstacleTree; }
     StaticVMapCollisionData& GetStaticTree() { return _staticVMapData; }
     StaticVMapCollisionData const& GetStaticTree() const { return _staticVMapData; }
     MMapData& GetMMapData() { return _mmapData; }
@@ -93,6 +96,7 @@ private:
     Map const& _map;
 
     DynamicVMapCollisionData _dynamicVMapData;
+    DynamicMapTree _pathObstacleTree;
     StaticVMapCollisionData _staticVMapData;
     MMapData _mmapData;
 };

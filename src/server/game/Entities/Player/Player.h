@@ -1459,6 +1459,9 @@ public:
     bool CanCompleteRepeatableQuest(Quest const* quest);
     bool CanRewardQuest(Quest const* quest, bool msg);
     bool CanRewardQuest(Quest const* quest, uint32 reward, bool msg);
+    // Backpack and bag slots that turning the quest in empties: Player::RewardQuest takes the quest's own
+    // items before it hands out the reward, so a reward may count on them.
+    void GetBagSlotsFreedByQuestReward(Quest const* quest, std::vector<uint16>& freedSlots) const;
     void AddQuestAndCheckCompletion(Quest const* quest, Object* questGiver);
     void AddQuest(Quest const* quest, Object* questGiver);
     void AbandonQuest(uint32 quest_id);
@@ -2390,6 +2393,10 @@ public:
         m_lastFallTime = time;
         m_lastFallZ = z;
     }
+    // Where the player last stood on something solid: alive, not falling, flying or swimming. The body of a
+    // player who falls out of the world is put back there (WorldSession::HandleMoverRelocation).
+    void SetLastGroundPosition(Position const& pos) { m_lastGroundPosition.WorldRelocate(GetMapId(), pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation()); }
+    [[nodiscard]] WorldLocation const& GetLastGroundPosition() const { return m_lastGroundPosition; }
     void HandleFall(MovementInfo const& movementInfo);
     void HandleVehicleFall(Unit* vehicleBase, MovementInfo const& movementInfo); // новое для vehicles
 
@@ -2468,6 +2475,11 @@ public:
     void SetTemporaryUnsummonedPetNumber(uint32 petnumber) { m_temporaryUnsummonedPetNumber = petnumber; }
     void UnsummonPetTemporaryIfAny();
     void ResummonPetTemporaryUnSummonedIfAny();
+
+    // Companion (non-combat pet) persistence, see Player::UpdateCompanionPet
+    void SetCompanionSpell(uint32 spellId) { m_companionSpell = spellId; }
+    [[nodiscard]] uint32 GetCompanionSpell() const { return m_companionSpell; }
+    void UpdateCompanionPet(uint32 diff);
     [[nodiscard]] bool IsPetNeedBeTemporaryUnsummoned() const { return GetSession()->PlayerLogout() || !IsInWorld() || !IsAlive() || IsMounted()/*+in flight*/ || GetVehicle() || IsBeingTeleported(); }
     bool CanResummonPet(uint32 spellid);
 
@@ -3051,6 +3063,13 @@ private:
     // Temporary removed pet cache
     uint32 m_temporaryUnsummonedPetNumber;
     uint32 m_oldpetspell;
+
+    // Companion (non-combat pet) that stays out across taxi flights, mounts and teleports: the spell that
+    // summoned it. 0 = none, dismissed by hand, or the owner died. See Player::UpdateCompanionPet.
+    uint32 m_companionSpell = 0;
+    uint32 m_companionCheckTimer = 0;
+
+    WorldLocation m_lastGroundPosition; // map id MAPID_INVALID until the first step on the ground
 
     AchievementMgr* m_achievementMgr;
     ReputationMgr*  m_reputationMgr;

@@ -48,7 +48,7 @@ static bool IsMutualChase(Unit* owner, Unit* target)
 
 inline float GetChaseRange(Unit const* owner, Unit const* target)
 {
-    float hitboxSum = owner->GetCombatReach() + target->GetCombatReach();
+    float hitboxSum = owner->GetCombatReachToward(target) + target->GetCombatReachToward(owner);
 
     float hoverDelta = owner->GetHoverHeight() - target->GetHoverHeight();
     if (hoverDelta != 0.0f)
@@ -583,6 +583,18 @@ static bool IsValidPredictedPosition(Unit* target, Position const& predicted)
     return true;
 }
 
+// The master's follower is in the half-circle in front of the master and no further than this
+static constexpr float FOLLOWER_APPROACH_DIST = 8.0f;
+
+// owner: a player's companion (non-combat pet), pet, guardian or charmed creature following that player
+static bool IsFollowerApproachedByMaster(Unit const* owner, Unit const* target)
+{
+    if (!target->IsPlayer() || (target->GetCritterGUID() != owner->GetGUID() && owner->GetCharmerOrOwnerGUID() != target->GetGUID()))
+        return false;
+
+    return target->HasInArc(float(M_PI), owner) && owner->GetExactDist2d(target) < FOLLOWER_APPROACH_DIST;
+}
+
 template<class T>
 bool FollowMovementGenerator<T>::PositionOkay(Unit* target, bool isPlayerPet, bool& targetIsMoving, uint32 diff)
 {
@@ -684,6 +696,24 @@ bool FollowMovementGenerator<T>::DoUpdate(T* owner, uint32 time_diff)
     }
     else
     {
+        // A pet or companion lets its master walk up to it: while the master faces it from close by it stays
+        // where it is instead of running round to its follow slot with every step the master takes.
+        if (IsFollowerApproachedByMaster(owner, target))
+        {
+            // It has arrived: its last move has ended, or it was told to follow while already standing here
+            // (a pet back from a fight). PetAI ends its "returning" state on this report.
+            bool const moveEnded = owner->HasUnitState(UNIT_STATE_FOLLOW_MOVE) && owner->movespline->Finalized();
+            if (moveEnded || !_lastTargetPosition)
+            {
+                owner->ClearUnitState(UNIT_STATE_FOLLOW_MOVE);
+                i_path = nullptr;
+                _lastTargetPosition = target->GetPosition();
+                MovementInform(owner);
+            }
+
+            return true;
+        }
+
         Position targetPosition = target->GetPosition();
         _lastTargetPosition = targetPosition;
 

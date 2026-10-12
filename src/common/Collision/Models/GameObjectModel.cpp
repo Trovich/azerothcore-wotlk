@@ -143,6 +143,7 @@ bool GameObjectModel::initialize(std::unique_ptr<GameObjectModelOwnerBase> model
     }
 
     iBound = rotated_bounds + iPos;
+    UpdateFootprint(mdl_box, iRotation);
 
 #ifdef SPAWN_CORNERS
     // test:
@@ -168,6 +169,17 @@ GameObjectModel* GameObjectModel::Create(std::unique_ptr<GameObjectModelOwnerBas
     }
 
     return mdl;
+}
+
+void GameObjectModel::UpdateFootprint(G3D::AABox const& scaledBox, G3D::Matrix3 const& rotation)
+{
+    Vector3 const& low = scaledBox.low();
+    Vector3 const& high = scaledBox.high();
+
+    iFootprint[0] = rotation * Vector3(low.x, low.y, 0.0f) + iPos;
+    iFootprint[1] = rotation * Vector3(high.x, low.y, 0.0f) + iPos;
+    iFootprint[2] = rotation * Vector3(high.x, high.y, 0.0f) + iPos;
+    iFootprint[3] = rotation * Vector3(low.x, high.y, 0.0f) + iPos;
 }
 
 bool GameObjectModel::intersectRay(G3D::Ray const& ray, float& MaxDist, bool StopAtFirstHit, uint32 ph_mask, VMAP::ModelIgnoreFlags ignoreFlags) const
@@ -279,6 +291,7 @@ bool GameObjectModel::UpdatePosition()
     }
 
     iBound = rotated_bounds + iPos;
+    UpdateFootprint(mdl_box, iRotation);
 #ifdef SPAWN_CORNERS
     // test:
     for (int i = 0; i < 8; ++i)

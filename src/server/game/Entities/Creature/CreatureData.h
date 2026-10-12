@@ -266,9 +266,17 @@ struct CreatureTemplate
         return (type_flags & CREATURE_TYPE_FLAG_TAMEABLE_EXOTIC) != 0;
     }
 
+    // Undead and demons flagged tameable (with a pet family) obey Forsaken hunters only; beasts obey anyone.
+    [[nodiscard]] bool IsForsakenOnlyTame() const
+    {
+        return type == CREATURE_TYPE_UNDEAD || type == CREATURE_TYPE_DEMON;
+    }
+
+    // "May this creature be a hunter's pet at all": the race of the tamer is checked where the taming
+    // happens (spell_hun_tame_beast), so stables, Call Pet and pet loading need nothing more than this.
     [[nodiscard]] bool IsTameable(bool exotic) const
     {
-        if (type != CREATURE_TYPE_BEAST || family == 0 || (type_flags & CREATURE_TYPE_FLAG_TAMEABLE) == 0)
+        if ((type != CREATURE_TYPE_BEAST && !IsForsakenOnlyTame()) || family == 0 || (type_flags & CREATURE_TYPE_FLAG_TAMEABLE) == 0)
             return false;
 
         // if can tame exotic then can tame any tameable
@@ -389,6 +397,7 @@ struct CreatureModelInfo
 {
     float bounding_radius;
     float combat_reach;
+    float combat_reach_front; // creature_model_reach: reach ahead of the model's origin, 0 = combat_reach all round
     uint8 gender;
     uint32 modelid_other_gender;
     float is_trigger;

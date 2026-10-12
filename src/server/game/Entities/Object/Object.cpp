@@ -2079,6 +2079,15 @@ bool WorldObject::CanDetectStealthOf(WorldObject const* obj, bool checkAlert) co
     if (!obj->m_stealth.GetFlags())
         return true;
 
+    // Absolute stealth: a stealth value this high (Shadowmeld on this server, set in Spell.dbc / spell_dbc)
+    // is never detected by a creature - not at point-blank range, not from the front, not with a stealth
+    // detection aura. Without it the mob Shadowmeld's Sanctuary has just dropped from combat would notice
+    // the night elf standing next to it at once (anything inside combat reach is always detected) and
+    // attack again. Player pets detect with their master's eyes (see CanDetect), so this is NPCs only;
+    // players keep the normal rules below - at this value that means point-blank range only.
+    if (IsCreature() && obj->m_stealth.GetValue(STEALTH_GENERAL) >= ABSOLUTE_STEALTH_VALUE)
+        return false;
+
     // dead players shouldnt be able to detect stealth on arenas
     if (isType(TYPEMASK_PLAYER))
         if (!ToPlayer()->IsAlive())
@@ -2132,6 +2141,12 @@ bool WorldObject::CanDetectStealthOf(WorldObject const* obj, bool checkAlert) co
         // If this unit is an NPC then player detect range doesn't apply
         if (unit && unit->IsPlayer() && visibilityRange > MAX_PLAYER_STEALTH_DETECT_RANGE)
             visibilityRange = MAX_PLAYER_STEALTH_DETECT_RANGE;
+
+        // Humans' Perception (58985: on this server an active racial, 10 s every minute) doubles the range
+        // at which stealth is detected, the 30 yd player cap included.
+        static constexpr uint32 SPELL_HUMAN_PERCEPTION = 58985;
+        if (unit && visibilityRange > 0.0f && unit->HasAura(SPELL_HUMAN_PERCEPTION))
+            visibilityRange *= 2.0f;
 
         if (checkAlert)
             visibilityRange += (visibilityRange * 0.08f) + 1.5f;

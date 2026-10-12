@@ -468,6 +468,69 @@ void Player::AddQuestAndCheckCompletion(Quest const* quest, Object* questGiver)
     }
 }
 
+void Player::GetBagSlotsFreedByQuestReward(Quest const* quest, std::vector<uint16>& freedSlots) const
+{
+    // The stacks Player::DestroyItemCount would remove whole, in the order it goes through them: backpack,
+    // keyring and currency, bags. (What it takes from the equipment or the bank frees no bag slot.)
+    auto take = [&](uint32 itemEntry, uint32 count)
+    {
+        uint32 remcount = 0;
+
+        // true = nothing more of this item is taken
+        auto visit = [&](Item const* item, uint16 pos, bool bagSlot)
+        {
+            if (!item || item->GetEntry() != itemEntry || item->IsInTrade())
+                return false;
+
+            if (item->GetCount() + remcount > count)
+                return true; // this stack is only reduced
+
+            remcount += item->GetCount();
+            if (bagSlot)
+                freedSlots.push_back(pos);
+
+            return remcount >= count;
+        };
+
+        for (uint8 i = INVENTORY_SLOT_ITEM_START; i < INVENTORY_SLOT_ITEM_END; ++i)
+            if (visit(GetItemByPos(INVENTORY_SLOT_BAG_0, i), uint16((INVENTORY_SLOT_BAG_0 << 8) | i), true))
+                return;
+
+        for (uint8 i = KEYRING_SLOT_START; i < CURRENCYTOKEN_SLOT_END; ++i)
+            if (visit(GetItemByPos(INVENTORY_SLOT_BAG_0, i), 0, false))
+                return;
+
+        for (uint8 i = INVENTORY_SLOT_BAG_START; i < INVENTORY_SLOT_BAG_END; ++i)
+            if (Bag* bag = GetBagByPos(i))
+                for (uint32 j = 0; j < bag->GetBagSize(); ++j)
+                    if (visit(bag->GetItemByPos(j), uint16((i << 8) | j), true))
+                        return;
+    };
+
+    // the same items and counts as in Player::RewardQuest
+    uint32 questId = quest->GetQuestId();
+    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+    {
+        if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->RequiredItemId[i]))
+        {
+            if (quest->RequiredItemCount[i] > 0 && itemTemplate->Bonding == BIND_QUEST_ITEM && !quest->IsRepeatable() && !HasQuestForItem(quest->RequiredItemId[i], questId, true))
+                take(quest->RequiredItemId[i], 9999);
+            else
+                take(quest->RequiredItemId[i], quest->RequiredItemCount[i]);
+        }
+    }
+    for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
+    {
+        if (ItemTemplate const* itemTemplate = sObjectMgr->GetItemTemplate(quest->ItemDrop[i]))
+        {
+            if (quest->ItemDropQuantity[i] > 0 && itemTemplate->Bonding == BIND_QUEST_ITEM && !quest->IsRepeatable() && !HasQuestForItem(quest->ItemDrop[i], questId))
+                take(quest->ItemDrop[i], 9999);
+            else
+                take(quest->ItemDrop[i], quest->ItemDropQuantity[i]);
+        }
+    }
+}
+
 bool Player::CanRewardQuest(Quest const* quest, uint32 reward, bool msg)
 {
     // prevent receive reward with quest items in bank or for not completed quest
@@ -485,11 +548,47 @@ bool Player::CanRewardQuest(Quest const* quest, uint32 reward, bool msg)
     }
 
     ItemPosCountVec dest;
+
+    // With full bags a quest that takes items away could not be turned in: the room was checked before the
+    // items were handed over. A reward that finds no place now may go into a slot the quest's items leave
+    // empty - each such slot once. RewardQuest takes the items first and stores the rewards afterwards.
+    std::vector<uint16> freedSlots;
+    bool freedSlotsKnown = false;
+    auto canStoreReward = [&](uint32 itemId, uint32 count)
+    {
+        ItemPosCountVec attempt = dest; // a failed attempt may leave half a plan behind
+        InventoryResult res = CanStoreNewItem(NULL_BAG, NULL_SLOT, attempt, itemId, count);
+        if (res == EQUIP_ERR_OK)
+        {
+            dest = attempt;
+            return res;
+        }
+
+        if (!freedSlotsKnown)
+        {
+            GetBagSlotsFreedByQuestReward(quest, freedSlots);
+            freedSlotsKnown = true;
+        }
+
+        for (auto itr = freedSlots.begin(); itr != freedSlots.end(); ++itr)
+        {
+            ItemPosCountVec inFreedSlot;
+            // swap = true: the slot counts as empty; the bag still has to be one the item may go into
+            if (CanStoreItem(uint8(*itr >> 8), uint8(*itr & 255), inFreedSlot, itemId, count, nullptr, true) == EQUIP_ERR_OK)
+            {
+                freedSlots.erase(itr);
+                return EQUIP_ERR_OK;
+            }
+        }
+
+        return res;
+    };
+
     if (quest->GetRewChoiceItemsCount() > 0)
     {
         if (quest->RewardChoiceItemId[reward])
         {
-            InventoryResult res = CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewardChoiceItemId[reward], quest->RewardChoiceItemCount[reward]);
+            InventoryResult res = canStoreReward(quest->RewardChoiceItemId[reward], quest->RewardChoiceItemCount[reward]);
             if (res != EQUIP_ERR_OK)
             {
                 SendEquipError(res, nullptr, nullptr, quest->RewardChoiceItemId[reward]);
@@ -504,7 +603,7 @@ bool Player::CanRewardQuest(Quest const* quest, uint32 reward, bool msg)
         {
             if (quest->RewardItemId[i])
             {
-                InventoryResult res = CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, quest->RewardItemId[i], quest->RewardItemIdCount[i]);
+                InventoryResult res = canStoreReward(quest->RewardItemId[i], quest->RewardItemIdCount[i]);
                 if (res != EQUIP_ERR_OK)
                 {
                     SendEquipError(res, nullptr, nullptr, quest->RewardItemId[i]);

@@ -49,6 +49,9 @@ void WorldSession::HandleDismissCritter(WorldPackets::Pet::DismissCritter& packe
 
     if (_player->GetCritterGUID() == pet->GetGUID())
     {
+        // dismissed by hand: do not bring it back (Player::UpdateCompanionPet)
+        _player->SetCompanionSpell(0);
+
         if (pet->IsCreature() && pet->ToCreature()->IsSummon())
             pet->ToTempSummon()->UnSummon();
     }

@@ -1,0 +1,17 @@
+--
+-- Death knights: humans, dwarves and blood elves only.
+--
+-- `playercreateinfo` is the server's list of valid race / class pairs (ObjectMgr::GetPlayerInfo). Without a row:
+--   * character creation is refused (WorldSession::HandleCharCreateOpcode -> Player::Create), GMs included;
+--   * the paid race / faction change refuses the race (HandleCharFactionOrRaceChangeCallback);
+--   * mod-playerbots does not create such random bots (RandomPlayerbotFactory::IsValidRaceClassCombination).
+-- An EXISTING character of a removed pair disappears from the character list and cannot log in
+-- (Player::BuildEnumData, Player::_LoadHomeBind). The random bot death knights of the removed races are moved
+-- to the allowed ones in pending_db_characters/rev_1790800000100000000.sql.
+--
+-- Removed: Orc (2), Night Elf (4), Undead (5), Tauren (6), Gnome (7), Troll (8), Draenei (11).
+-- Their playercreateinfo_action rows stay: they are ignored without a pair and make a row easy to put back.
+-- Client side: CharBaseInfo.dbc (client-patches/race-class/build_race_class.py) - keep the two in step.
+-- Read at startup: restart the worldserver.
+--
+DELETE FROM `playercreateinfo` WHERE `class` = 6 AND `race` NOT IN (1, 3, 10);

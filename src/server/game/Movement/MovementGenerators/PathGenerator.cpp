@@ -18,15 +18,20 @@
 #include "PathGenerator.h"
 #include "Creature.h"
 #include "DetourCommon.h"
+#include "DynamicTree.h"
+#include "GameObjectModel.h"
 #include "Geometry.h"
 #include "Log.h"
 #include "MMapMgr.h"
 #include "Map.h"
 #include "Metric.h"
+#include "World.h"
 #ifdef MOD_PLAYERBOTS
 #include "Player.h"
 #include "WorldSession.h"
 #endif
+#include <algorithm>
+#include <cmath>
 
 // Blades Edge Arena Ropes normalization
 namespace
@@ -131,7 +136,7 @@ PathGenerator::PathGenerator(WorldObject const* owner) :
     _polyLength(0), _type(PATHFIND_BLANK), _useStraightPath(false), _forceDestination(false),
     _slopeCheck(false), _pointPathLimit(MAX_POINT_PATH_LENGTH), _useRaycast(false),
     _endPosition(G3D::Vector3::zero()), _source(owner), _navMesh(nullptr),
-    _navMeshQuery(nullptr)
+    _navMeshQuery(nullptr), _lastObstacle(nullptr), _lastObstacleLeft(false)
 {
     memset(_pathPolyRefs, 0, sizeof(_pathPolyRefs));
 
@@ -185,6 +190,7 @@ bool PathGenerator::CalculatePath(float x, float y, float z, float destX, float 
     UpdateFilter();
 
     BuildPolyPath(start, dest);
+    AvoidDynamicObstacles();
     return true;
 }
 
@@ -1231,6 +1237,473 @@ void PathGenerator::ShortenPathUntilDist(G3D::Vector3 const& target, float dist)
     // (@todo review this)
     _pathPoints[i] += (_pathPoints[i - 1] - _pathPoints[i]).direction() * (dist - (_pathPoints[i] - target).length());
     _pathPoints.resize(i + 1);
+}
+
+// Walking round spawned gameobjects
+namespace
+{
+    constexpr float OBSTACLE_RAY_HEIGHT = 0.8f;         // segments are tested this far above the ground, lower things are stepped over
+    constexpr float OBSTACLE_CLEARANCE = 0.3f;          // kept between the mover's bounding radius and the object
+    constexpr float OBSTACLE_CORNER_SLACK = 0.1f;       // detour corners sit this far outside the area a leg may not cross
+    constexpr float OBSTACLE_MIN_RADIUS = 0.3f;
+    constexpr float OBSTACLE_MAX_RADIUS = 2.0f;
+    constexpr float OBSTACLE_SIDE_BIAS = 1.3f;          // the side taken last time is kept unless it got this much longer
+    constexpr float OBSTACLE_MAX_FLOOR_DIFF = 3.0f;
+    constexpr uint32 OBSTACLE_MAX_PER_PATH = 4;
+    constexpr int OBSTACLE_MAX_LEG_POLYS = 32;
+
+    // The footprint of a gameobject model as a rectangle that may be turned any way
+    struct ObstacleRect
+    {
+        float cx, cy;   // centre
+        float ux, uy;   // unit vector along one side, the other side runs along (-uy, ux)
+        float hu, hv;   // half sizes along those two
+
+        explicit ObstacleRect(G3D::Vector3 const* footprint)
+        {
+            cx = (footprint[0].x + footprint[2].x) * 0.5f;
+            cy = (footprint[0].y + footprint[2].y) * 0.5f;
+
+            float const ax = footprint[1].x - footprint[0].x;
+            float const ay = footprint[1].y - footprint[0].y;
+            float const bx = footprint[3].x - footprint[0].x;
+            float const by = footprint[3].y - footprint[0].y;
+            float const lengthA = std::sqrt(ax * ax + ay * ay);
+            float const lengthB = std::sqrt(bx * bx + by * by);
+
+            // the shorter side may have no length at all, so take the direction from the longer one
+            if (lengthA >= lengthB)
+            {
+                ux = lengthA > 0.0f ? ax / lengthA : 1.0f;
+                uy = lengthA > 0.0f ? ay / lengthA : 0.0f;
+            }
+            else
+            {
+                ux = by / lengthB;
+                uy = -bx / lengthB;
+            }
+
+            hu = lengthA * 0.5f;
+            hv = lengthB * 0.5f;
+        }
+
+        void ToLocal(G3D::Vector3 const& point, float& u, float& v) const
+        {
+            float const dx = point.x - cx;
+            float const dy = point.y - cy;
+            u = dx * ux + dy * uy;
+            v = dy * ux - dx * uy;
+        }
+
+        [[nodiscard]] G3D::Vector3 ToWorld(float u, float v, float z) const
+        {
+            return G3D::Vector3(cx + u * ux - v * uy, cy + u * uy + v * ux, z);
+        }
+
+        // all three take the rectangle made 'grow' yards larger on every side
+
+        [[nodiscard]] bool Contains(G3D::Vector3 const& point, float grow) const
+        {
+            float u, v;
+            ToLocal(point, u, v);
+            return std::fabs(u) < hu + grow && std::fabs(v) < hv + grow;
+        }
+
+        // true if the segment passes through the inside, touching the border does not count
+        [[nodiscard]] bool Crosses(G3D::Vector3 const& from, G3D::Vector3 const& to, float grow) const
+        {
+            float start[2], end[2];
+            ToLocal(from, start[0], start[1]);
+            ToLocal(to, end[0], end[1]);
+            float const extent[2] = { hu + grow, hv + grow };
+
+            float tMin = 0.0f;
+            float tMax = 1.0f;
+            for (int axis = 0; axis < 2; ++axis)
+            {
+                float const delta = end[axis] - start[axis];
+                if (std::fabs(delta) < 1e-5f)
+                {
+                    if (std::fabs(start[axis]) >= extent[axis])
+                        return false;
+
+                    continue;
+                }
+
+                float t1 = (-extent[axis] - start[axis]) / delta;
+                float t2 = (extent[axis] - start[axis]) / delta;
+                if (t1 > t2)
+                    std::swap(t1, t2);
+
+                tMin = std::max(tMin, t1);
+                tMax = std::min(tMax, t2);
+                if (tMin >= tMax)
+                    return false;
+            }
+
+            return tMax - tMin > 1e-3f;
+        }
+
+        // corners 0..3 follow each other round the rectangle
+        [[nodiscard]] G3D::Vector3 Corner(uint32 index, float grow, float z) const
+        {
+            float const u = (index == 1 || index == 2) ? hu + grow : -(hu + grow);
+            float const v = (index == 2 || index == 3) ? hv + grow : -(hv + grow);
+            return ToWorld(u, v, z);
+        }
+
+        // the nearest point on the border, for a point inside
+        [[nodiscard]] G3D::Vector3 PushOut(G3D::Vector3 const& point, float grow) const
+        {
+            float u, v;
+            ToLocal(point, u, v);
+            float const extentU = hu + grow;
+            float const extentV = hv + grow;
+            if (extentU - std::fabs(u) < extentV - std::fabs(v))
+                u = u < 0.0f ? -extentU : extentU;
+            else
+                v = v < 0.0f ? -extentV : extentV;
+
+            return ToWorld(u, v, point.z);
+        }
+    };
+
+    // A way round the rectangle over up to three corners that follow each other
+    struct ObstacleRoute
+    {
+        uint32 count = 0;
+        uint32 corners[3] = { 0, 0, 0 };
+        float length = 0.0f;
+
+        [[nodiscard]] bool SharesCorner(ObstacleRoute const& other) const
+        {
+            for (uint32 i = 0; i < count; ++i)
+                for (uint32 j = 0; j < other.count; ++j)
+                    if (corners[i] == other.corners[j])
+                        return true;
+
+            return false;
+        }
+    };
+
+    float ObstacleDistance2D(G3D::Vector3 const& a, G3D::Vector3 const& b)
+    {
+        float const dx = a.x - b.x;
+        float const dy = a.y - b.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+}
+
+void PathGenerator::AvoidDynamicObstacles()
+{
+    // straight and raycast paths are not walked, and a raycast caller checks dynamic collision itself
+    if (_useRaycast || _useStraightPath || _pathPoints.size() < 2)
+        return;
+
+    // only paths that follow the navmesh: the rest is flown, swum or a fallback already
+    if (!(_type & (PATHFIND_NORMAL | PATHFIND_INCOMPLETE)) ||
+        (_type & (PATHFIND_SHORTCUT | PATHFIND_NOPATH | PATHFIND_NOT_USING_PATH | PATHFIND_SHORT)))
+        return;
+
+    if (!sWorld->getBoolConfig(CONFIG_PATH_GO_OBSTACLES_ENABLE))
+        return;
+
+    Unit const* unit = _source->ToUnit();
+    if (!unit || unit->IsFlying())
+        return;
+
+    if (unit->IsPlayer() && !sWorld->getBoolConfig(CONFIG_PATH_GO_OBSTACLES_PLAYERS))
+        return;
+
+    DynamicMapTree const& tree = _source->GetMap()->GetMapCollisionData().GetPathObstacleTree();
+    if (!tree.size())
+        return;
+
+    float const scanDistance = sWorld->getFloatConfig(CONFIG_PATH_GO_OBSTACLES_SCAN_DISTANCE);
+    float scanned = 0.0f;
+
+    // objects the path starts or ends in, and objects no way round was found for
+    std::vector<GameObjectModel const*> ignored;
+    uint32 handled = 0;
+
+    for (std::size_t i = 0; i + 1 < _pathPoints.size(); ++i)
+    {
+        if (scanDistance > 0.0f && scanned > scanDistance)
+            break;
+
+        scanned += ObstacleDistance2D(_pathPoints[i], _pathPoints[i + 1]);
+
+        GameObjectModel const* obstacle = FindObstacle(tree, ignored, _pathPoints[i], _pathPoints[i + 1]);
+        if (!obstacle)
+            continue;
+
+        std::size_t resumeIndex = 0;
+        if (DetourAroundObstacle(tree, obstacle, i, ignored, resumeIndex))
+        {
+            LOG_DEBUG("movement", "PathGenerator::AvoidDynamicObstacles: {} goes round gameobject model {}",
+                _source->GetGUID().ToString(), obstacle->name);
+
+            // carry on from the point the detour rejoins the path at
+            i = resumeIndex - 1;
+        }
+        else
+            ignored.push_back(obstacle);
+
+        if (++handled >= OBSTACLE_MAX_PER_PATH)
+            break;
+    }
+}
+
+GameObjectModel const* PathGenerator::FindObstacle(DynamicMapTree const& tree, std::vector<GameObjectModel const*> const& ignored,
+    G3D::Vector3 const& from, G3D::Vector3 const& to) const
+{
+    uint32 const phaseMask = _source->GetPhaseMask();
+
+    GameObjectModel const* obstacle = tree.GetHitModel(phaseMask,
+        G3D::Vector3(from.x, from.y, from.z + OBSTACLE_RAY_HEIGHT), G3D::Vector3(to.x, to.y, to.z + OBSTACLE_RAY_HEIGHT));
+
+    // A path point on top of a low object got that object's height, and the ray above then climbs over
+    // the object's edge. Look again level with the lower end.
+    if (!obstacle && std::fabs(from.z - to.z) > 0.5f)
+    {
+        float const z = std::min(from.z, to.z) + OBSTACLE_RAY_HEIGHT;
+        obstacle = tree.GetHitModel(phaseMask, G3D::Vector3(from.x, from.y, z), G3D::Vector3(to.x, to.y, z));
+    }
+
+    if (obstacle && std::find(ignored.begin(), ignored.end(), obstacle) != ignored.end())
+        return nullptr;
+
+    return obstacle;
+}
+
+bool PathGenerator::DetourAroundObstacle(DynamicMapTree const& tree, GameObjectModel const* obstacle, std::size_t hitSegment,
+    std::vector<GameObjectModel const*> const& ignored, std::size_t& resumeIndex)
+{
+    ObstacleRect const rect(obstacle->GetFootprint());
+
+    // leaving the object or heading right into it (a chest being looted, a target standing on it):
+    // there is nothing to walk round
+    if (rect.Contains(_pathPoints.front(), 0.0f) || rect.Contains(_pathPoints.back(), 0.0f))
+        return false;
+
+    float const outer = std::clamp(_source->ToUnit()->GetBoundaryRadius(), OBSTACLE_MIN_RADIUS, OBSTACLE_MAX_RADIUS) + OBSTACLE_CLEARANCE;
+    float const inner = outer - OBSTACLE_CORNER_SLACK;
+
+    // the stretch to replace runs from the last point still clear of the object to the first one clear of it again
+    std::size_t leave = hitSegment;
+    while (leave > 0 && rect.Contains(_pathPoints[leave], inner))
+        --leave;
+
+    std::size_t rejoin = hitSegment + 1;
+    while (rejoin + 1 < _pathPoints.size() && rect.Contains(_pathPoints[rejoin], inner))
+        ++rejoin;
+
+    // a path that starts right next to the object first steps away from it, one that ends there steps up to it last
+    Movement::PointsArray head;
+    head.push_back(_pathPoints[leave]);
+    if (rect.Contains(head.back(), inner))
+        head.push_back(rect.PushOut(head.back(), outer));
+
+    Movement::PointsArray tail;
+    if (rect.Contains(_pathPoints[rejoin], inner))
+        tail.push_back(rect.PushOut(_pathPoints[rejoin], outer));
+    tail.push_back(_pathPoints[rejoin]);
+
+    G3D::Vector3 const from = head.back();
+    G3D::Vector3 const to = tail.front();
+
+    // every way over corners that follow each other, in both directions, that stays out of the object
+    ObstacleRoute routes[21];
+    uint32 routeCount = 0;
+
+    auto addRoute = [&](uint32 count, uint32 first, int32 step)
+    {
+        ObstacleRoute route;
+        route.count = count;
+
+        G3D::Vector3 previous = from;
+        for (uint32 i = 0; i < count; ++i)
+        {
+            route.corners[i] = uint32(int32(first) + step * int32(i) + 4) % 4;
+
+            G3D::Vector3 const corner = rect.Corner(route.corners[i], outer, from.z);
+            if (rect.Crosses(previous, corner, inner))
+                return;
+
+            route.length += ObstacleDistance2D(previous, corner);
+            previous = corner;
+        }
+
+        if (rect.Crosses(previous, to, inner))
+            return;
+
+        route.length += ObstacleDistance2D(previous, to);
+        routes[routeCount++] = route;
+    };
+
+    addRoute(0, 0, 1);
+    for (uint32 first = 0; first < 4; ++first)
+    {
+        addRoute(1, first, 1);
+        for (uint32 count = 2; count <= 3; ++count)
+        {
+            addRoute(count, first, 1);
+            addRoute(count, first, -1);
+        }
+    }
+
+    if (!routeCount)
+        return false;
+
+    // the shortest way, and the shortest one round the other side as a fallback
+    ObstacleRoute const* best = &routes[0];
+    for (uint32 i = 1; i < routeCount; ++i)
+        if (routes[i].length < best->length)
+            best = &routes[i];
+
+    ObstacleRoute const* other = nullptr;
+    if (best->count)
+        for (uint32 i = 0; i < routeCount; ++i)
+            if (routes[i].count && !routes[i].SharesCorner(*best) && (!other || routes[i].length < other->length))
+                other = &routes[i];
+
+    auto isLeft = [&](ObstacleRoute const& route)
+    {
+        G3D::Vector3 const corner = rect.Corner(route.corners[0], outer, from.z);
+        return (to.x - from.x) * (corner.y - from.y) - (to.y - from.y) * (corner.x - from.x) > 0.0f;
+    };
+
+    if (other && _lastObstacle == obstacle && isLeft(*other) == _lastObstacleLeft && isLeft(*best) != _lastObstacleLeft &&
+        other->length <= best->length * OBSTACLE_SIDE_BIAS)
+        std::swap(best, other);
+
+    ObstacleRoute const* const order[2] = { best, other };
+    for (ObstacleRoute const* route : order)
+    {
+        if (!route)
+            continue;
+
+        Movement::PointsArray points = head;
+        for (uint32 i = 0; i < route->count; ++i)
+            points.push_back(rect.Corner(route->corners[i], outer, from.z));
+        points.insert(points.end(), tail.begin(), tail.end());
+
+        if (!ValidateDetour(tree, ignored, points))
+            continue;
+
+        // keep the point spacing of the rest of the path, so that the spline follows the ground on long legs
+        Movement::PointsArray detour;
+        for (std::size_t leg = 0; leg + 1 < points.size(); ++leg)
+        {
+            G3D::Vector3 const& legStart = points[leg];
+            G3D::Vector3 const& legEnd = points[leg + 1];
+            float const legLength = (legEnd - legStart).magnitude();
+
+            for (float walked = SMOOTH_PATH_STEP_SIZE; walked + 1.0f < legLength; walked += SMOOTH_PATH_STEP_SIZE)
+            {
+                G3D::Vector3 point = legStart + (legEnd - legStart) * (walked / legLength);
+                point.z += 0.5f;
+                _source->UpdateAllowedPositionZ(point.x, point.y, point.z);
+                detour.push_back(point);
+            }
+
+            if (leg + 2 < points.size())
+                detour.push_back(legEnd);
+        }
+
+        if (_pathPoints.size() - (rejoin - leave - 1) + detour.size() > std::size_t(MAX_POINT_PATH_LENGTH))
+            return false;
+
+        _pathPoints.erase(_pathPoints.begin() + leave + 1, _pathPoints.begin() + rejoin);
+        _pathPoints.insert(_pathPoints.begin() + leave + 1, detour.begin(), detour.end());
+        resumeIndex = leave + 1 + detour.size();
+
+        if (route->count)
+        {
+            _lastObstacle = obstacle;
+            _lastObstacleLeft = isLeft(*route);
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool PathGenerator::ValidateDetour(DynamicMapTree const& tree, std::vector<GameObjectModel const*> const& ignored, Movement::PointsArray& route) const
+{
+    // every leg has to stay on the navmesh the mover is allowed on...
+    float const extents[VERTEX_SIZE] = { 1.0f, 3.0f, 1.0f };
+    float position[VERTEX_SIZE] = { route[0].y, route[0].z, route[0].x };
+    float nearest[VERTEX_SIZE] = { 0.0f, 0.0f, 0.0f };
+    dtPolyRef poly = INVALID_POLYREF;
+    if (dtStatusFailed(_navMeshQuery->findNearestPoly(position, extents, &_filter, &poly, nearest)) || poly == INVALID_POLYREF)
+        return false;
+
+    if (dtVdist2DSqr(position, nearest) > 1.0f)
+        return false;
+
+    dtVcopy(position, nearest);
+
+    for (std::size_t i = 1; i < route.size(); ++i)
+    {
+        bool const isLast = i + 1 == route.size();
+        float end[VERTEX_SIZE] = { route[i].y, position[1], route[i].x };
+
+        // nothing to cast over
+        if (dtVdist2DSqr(position, end) < 0.01f)
+        {
+            if (!isLast)
+                route[i].z = position[1];
+
+            continue;
+        }
+
+        float hit = 0.0f;
+        float hitNormal[VERTEX_SIZE] = { 0.0f, 0.0f, 0.0f };
+        dtPolyRef visited[OBSTACLE_MAX_LEG_POLYS];
+        int visitedCount = 0;
+        dtStatus const status = _navMeshQuery->raycast(poly, position, end, &_filter, &hit, hitNormal, visited, &visitedCount, OBSTACLE_MAX_LEG_POLYS);
+
+        // raycast() sets hit to FLT_MAX if the end was reached
+        if (dtStatusFailed(status) || dtStatusDetail(status, DT_BUFFER_TOO_SMALL) || hit != FLT_MAX || visitedCount <= 0)
+            return false;
+
+        poly = visited[visitedCount - 1];
+
+        float height = 0.0f;
+        if (dtStatusFailed(_navMeshQuery->getPolyHeight(poly, end, &height)))
+        {
+            float closest[VERTEX_SIZE];
+            if (dtStatusFailed(_navMeshQuery->closestPointOnPoly(poly, end, closest, nullptr)))
+                return false;
+
+            height = closest[1];
+        }
+
+        end[1] = height;
+
+        if (isLast)
+        {
+            // the cast is flat and may have come out on another floor than the point it should reach
+            if (std::fabs(height - route[i].z) > OBSTACLE_MAX_FLOOR_DIFF)
+                return false;
+        }
+        else
+        {
+            route[i].z = height + 0.5f;
+            _source->UpdateAllowedPositionZ(route[i].x, route[i].y, route[i].z);
+        }
+
+        dtVcopy(position, end);
+    }
+
+    // ...and must not run into this or another object
+    for (std::size_t i = 0; i + 1 < route.size(); ++i)
+        if (FindObstacle(tree, ignored, route[i], route[i + 1]))
+            return false;
+
+    return true;
 }
 
 bool PathGenerator::IsInvalidDestinationZ(Unit const* target) const

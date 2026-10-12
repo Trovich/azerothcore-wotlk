@@ -1403,6 +1403,23 @@ bool SpellInfo::IsSingleTarget() const
     return false;
 }
 
+// Dwarves' Find Treasure (2481) may run together with ONE gathering tracking - Find Minerals, Find Herbs or
+// Find Fish, i.e. any other SPELL_AURA_TRACK_RESOURCES spell. The gathering trackings still replace each
+// other, and creature tracking still replaces everything. PLAYER_TRACK_RESOURCES is a bit mask that the
+// aura handler sets and clears bit by bit, so the client shows both kinds on the minimap.
+static bool IsFindTreasureWithGathering(SpellInfo const* a, SpellInfo const* b)
+{
+    static constexpr uint32 SPELL_FIND_TREASURE = 2481;
+
+    if (a->Id == SPELL_FIND_TREASURE)
+        return b->Id != SPELL_FIND_TREASURE && b->HasAura(SPELL_AURA_TRACK_RESOURCES);
+
+    if (b->Id == SPELL_FIND_TREASURE)
+        return a->HasAura(SPELL_AURA_TRACK_RESOURCES);
+
+    return false;
+}
+
 bool SpellInfo::IsAuraExclusiveBySpecificWith(SpellInfo const* spellInfo) const
 {
     SpellSpecificType spellSpec1 = GetSpellSpecific();
@@ -1413,6 +1430,8 @@ bool SpellInfo::IsAuraExclusiveBySpecificWith(SpellInfo const* spellInfo) const
     switch (spellSpec1)
     {
         case SPELL_SPECIFIC_TRACKER:
+            isExclusive = spellSpec1 == spellSpec2 && !IsFindTreasureWithGathering(this, spellInfo);
+            break;
         case SPELL_SPECIFIC_WARLOCK_ARMOR:
         case SPELL_SPECIFIC_MAGE_ARMOR:
         case SPELL_SPECIFIC_ELEMENTAL_SHIELD:

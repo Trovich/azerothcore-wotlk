@@ -1101,6 +1101,10 @@ void Player::setDeathState(DeathState s, bool /*despawn = false*/)
         //FIXME: is pet dismissed at dying or releasing spirit? if second, add setDeathState(DeathState::Dead) to HandleRepopRequestOpcode and define pet unsummon here with (s == DEAD)
         RemovePet(nullptr, PET_SAVE_NOT_IN_SLOT, true);
 
+        // the companion is unsummoned with every controlled unit in Unit::setDeathState and is not brought
+        // back: after a resurrection the player summons it again (Player::UpdateCompanionPet)
+        SetCompanionSpell(0);
+
         // save value before aura remove in Unit::setDeathState
         ressSpellId = GetUInt32Value(PLAYER_SELF_RES_SPELL);
 
@@ -4590,6 +4594,9 @@ void Player::ResurrectPlayer(float restore_percent, bool applySickness)
     SendMoveRoot(false);
     SetWaterWalking(false);
     m_deathTimer = 0;
+    // set by a fall out of the world and normally cleared on release (RepopAtGraveyard); a body brought back
+    // to the edge and resurrected there never releases
+    RemovePlayerFlag(PLAYER_FLAGS_IS_OUT_OF_BOUNDS);
 
     // set health/powers (0- will be set in caller)
     if (restore_percent > 0.0f)
@@ -12644,7 +12651,12 @@ float Player::GetReputationPriceDiscount(FactionTemplateEntry const* factionTemp
         return discount;
     }
 
-    discount = discount - 0.05f * (rank - REP_NEUTRAL);
+    // Humans' racial Diplomacy (20599) doubles what a reputation is worth at the vendor:
+    // 10 / 20 / 30 / 40 % off at Friendly / Honored / Revered / Exalted instead of 5 / 10 / 15 / 20 %.
+    static constexpr uint32 SPELL_HUMAN_DIPLOMACY = 20599;
+    float const discountPerRank = HasAura(SPELL_HUMAN_DIPLOMACY) ? 0.10f : 0.05f;
+
+    discount = discount - discountPerRank * (rank - REP_NEUTRAL);
 
     sScriptMgr->OnPlayerGetReputationPriceDiscount(this, factionTemplate, discount);
     return discount;
