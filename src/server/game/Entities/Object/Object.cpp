@@ -2735,6 +2735,10 @@ void WorldObject::GetNearPoint2D(WorldObject const* searcher, float& x, float& y
 {
     float effectiveReach = GetCombatReach();
 
+    // a unit with a reach shape of its own (creature_model_reach): the point lies on its oval, not on a circle
+    if (Unit const* unit = ToUnit())
+        effectiveReach = unit->GetCombatReachAtAngle(absAngle - GetOrientation());
+
     if (searcher)
     {
         effectiveReach += searcher->GetCombatReach();

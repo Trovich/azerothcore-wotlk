@@ -883,10 +883,13 @@ public:
     bool IsWithinCombatRange(Unit const* obj, float dist2compare) const;
     bool IsWithinMeleeRange(Unit const* obj, float dist = 0.f) const;
     float GetMeleeRange(Unit const* target) const;
-    // Combat reach in the direction of `other`. The same as GetCombatReach() unless the unit's model has a
-    // reach of its own for what is in front of it (creature_model_reach).
+    // Combat reach in a direction: towards `other`, or at an angle from the unit's facing (0 = ahead). The same
+    // as GetCombatReach() unless the unit's model has a reach shape of its own (creature_model_reach).
     [[nodiscard]] float GetCombatReachToward(Unit const* other) const;
-    void SetCombatReachFront(float reach) { m_combatReachFront = reach; }
+    [[nodiscard]] float GetCombatReachAtAngle(float relativeAngle) const;
+    // how far the model's body lies outside its reach (0 without a reach shape)
+    [[nodiscard]] float GetBodyMargin() const { return m_bodyMargin; }
+    void SetCombatReachShape(float front, float side, float bodyMargin) { m_combatReachFront = front; m_combatReachSide = side; m_bodyMargin = bodyMargin; }
 
     void setAttackTimer(WeaponAttackType type, int32 time) { m_attackTimer[type] = time; }  /// @todo - Look to convert to std::chrono
     void resetAttackTimer(WeaponAttackType type = BASE_ATTACK);
@@ -2258,7 +2261,10 @@ private:
     bool m_cleanupDone; // lock made to not add stuff after cleanup before delete
     bool m_duringRemoveFromWorld; // lock made to not add stuff after begining removing from world
 
-    float m_combatReachFront = 0.0f; // scaled like UNIT_FIELD_COMBATREACH; 0 = none
+    // reach shape, scaled like UNIT_FIELD_COMBATREACH (which is its rear end); front 0 = none
+    float m_combatReachFront = 0.0f;
+    float m_combatReachSide = 0.0f;
+    float m_bodyMargin = 0.0f;
 
     uint32 _oldFactionId;           ///< faction before charm
     bool _isWalkingBeforeCharm;     ///< Are we walking before we were charmed?

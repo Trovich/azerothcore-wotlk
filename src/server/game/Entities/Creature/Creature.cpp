@@ -3573,7 +3573,7 @@ void Creature::SetObjectScale(float scale)
     Unit::SetObjectScale(scale);
 
     float combatReach = DEFAULT_WORLD_OBJECT_SIZE;
-    SetCombatReachFront(0.0f);
+    SetCombatReachShape(0.0f, 0.0f, 0.0f);
 
     if (CreatureModelInfo const* minfo = sObjectMgr->GetCreatureModelInfo(GetDisplayId()))
     {
@@ -3581,7 +3581,7 @@ void Creature::SetObjectScale(float scale)
         if (minfo->combat_reach > 0)
             combatReach = minfo->combat_reach;
         if (!IsPet())
-            SetCombatReachFront(minfo->combat_reach_front * scale);
+            SetCombatReachShape(minfo->combat_reach_front * scale, minfo->combat_reach_side * scale, minfo->body_margin * scale);
     }
 
     if (IsPet())

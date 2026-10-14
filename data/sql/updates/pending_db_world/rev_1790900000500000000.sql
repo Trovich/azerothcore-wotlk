@@ -18,7 +18,7 @@ UPDATE `tmp_patrol_dog` SET `entry` = 60303, `name` = 'Stormwind Mastiff', `subn
     `AIName` = 'SmartAI', `ScriptName` = '', `VerifiedBuild` = 0;
 INSERT INTO `creature_template` SELECT * FROM `tmp_patrol_dog`; DROP TEMPORARY TABLE `tmp_patrol_dog`;
 DELETE FROM `creature_template_model` WHERE `CreatureID` = 60303;
-INSERT INTO `creature_template_model` (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`, `VerifiedBuild`) VALUES (60303, 0, 30213, 1.129, 1, 0);
+INSERT INTO `creature_template_model` (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`, `VerifiedBuild`) VALUES (60303, 0, 30213, 1.707, 1, 0);
 DELETE FROM `creature_equip_template` WHERE `CreatureID` = 60303;
 -- the nose: the stealth detection the officers had
 DELETE FROM `creature_template_addon` WHERE `entry` = 60303;

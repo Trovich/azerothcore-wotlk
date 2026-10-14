@@ -58,6 +58,7 @@ bool FormationMovementGenerator::DoUpdate(Creature* owner, uint32 diff)
     if (owner->HasUnitState(UNIT_STATE_NOT_MOVE) || owner->IsMovementPreventedByCasting())
     {
         owner->StopMoving();
+        owner->ClearUnitState(UNIT_STATE_FOLLOW_MOVE);
         _nextMoveTimer.Reset(0);
         _hasPredictedDestination = false;
         _isMoving = false;
@@ -67,6 +68,7 @@ bool FormationMovementGenerator::DoUpdate(Creature* owner, uint32 diff)
     if (target->movespline->Finalized() && target->movespline->GetId() == _lastLeaderSplineID && _hasPredictedDestination)
     {
         owner->StopMoving();
+        owner->ClearUnitState(UNIT_STATE_FOLLOW_MOVE);
         _nextMoveTimer.Reset(0);
         _hasPredictedDestination = false;
         _isMoving = false;
@@ -111,6 +113,9 @@ bool FormationMovementGenerator::DoUpdate(Creature* owner, uint32 diff)
     if (_isMoving && owner->movespline->Finalized())
     {
         _isMoving = false;
+        // standing in its slot: no longer "moving". The state used to stay on for as long as the generator lived,
+        // and Unit::IsStopped() was false for a member that stood still (SetFacingToObject did nothing for it).
+        owner->ClearUnitState(UNIT_STATE_FOLLOW_MOVE);
         owner->SetFacingTo(target->GetOrientation());
         MovementInform(owner);
     }

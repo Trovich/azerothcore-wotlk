@@ -1815,8 +1815,21 @@ void Spell::SelectImplicitTargetDestTargets(SpellEffIndex effIndex, SpellImplici
                 // enough to clear the circle (plus a hair) - not out to the full reach -
                 // so normal-sized targets keep the tight stock placement and giants land
                 // just past the line instead of several yards further out.
+                //
+                // A model with a reach shape of its own (creature_model_reach, the clefthoofs): the reach
+                // behind it, and its body margin on top - the rump lies outside the reach, and landing
+                // "just past the line" put the rogue inside the beast, under its tail. Half a yard clear
+                // of the body is still within melee range.
                 float offset = target->GetFloatValue(UNIT_FIELD_BOUNDINGRADIUS);
-                if (float const combatReach = target->GetObjectSize(); dist + offset < combatReach)
+                float combatReach = target->GetObjectSize();
+                if (Unit const* unitTarget = target->ToUnit())
+                {
+                    combatReach = unitTarget->GetCombatReachAtAngle(angle);
+                    if (unitTarget->GetBodyMargin() > 0.0f)
+                        combatReach += unitTarget->GetBodyMargin() + 0.5f;
+                }
+
+                if (dist + offset < combatReach)
                     offset = combatReach - dist + 0.1f;
 
                 dist += offset;
@@ -8277,10 +8290,7 @@ bool Spell::CheckEffectTarget(Unit const* target, uint32 eff) const
         case SPELL_AURA_MOD_CHARM:
         case SPELL_AURA_MOD_POSSESS_PET:
         case SPELL_AURA_AOE_CHARM:
-            // a hunter's own pet stays his to guide (Eyes of the Beast) while it carries prey in its claws:
-            // a gargoyle holding somebody (Gargoyle's Grip) is a vehicle for that time
-            if (target->IsCreature() && target->IsVehicle() &&
-                !(m_spellInfo->Effects[eff].ApplyAuraName == SPELL_AURA_MOD_POSSESS_PET && target->IsPet()))
+            if (target->IsCreature() && target->IsVehicle())
                 return false;
             if (target->IsMounted() && m_spellInfo->Effects[eff].ApplyAuraName != SPELL_AURA_MOD_POSSESS)
                 return false;

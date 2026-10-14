@@ -2477,8 +2477,9 @@ public:
     void ResummonPetTemporaryUnSummonedIfAny();
 
     // Companion (non-combat pet) persistence, see Player::UpdateCompanionPet
-    void SetCompanionSpell(uint32 spellId) { m_companionSpell = spellId; }
+    void SetCompanionSpell(uint32 spellId);
     [[nodiscard]] uint32 GetCompanionSpell() const { return m_companionSpell; }
+    void LoadCompanionSpell();
     void UpdateCompanionPet(uint32 diff);
     [[nodiscard]] bool IsPetNeedBeTemporaryUnsummoned() const { return GetSession()->PlayerLogout() || !IsInWorld() || !IsAlive() || IsMounted()/*+in flight*/ || GetVehicle() || IsBeingTeleported(); }
     bool CanResummonPet(uint32 spellid);

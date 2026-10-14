@@ -397,7 +397,11 @@ struct CreatureModelInfo
 {
     float bounding_radius;
     float combat_reach;
-    float combat_reach_front; // creature_model_reach: reach ahead of the model's origin, 0 = combat_reach all round
+    // creature_model_reach: the reach as an oval round a model whose origin is not in the middle of its body.
+    // combat_reach is its rear end. 0 in combat_reach_front = no shape, combat_reach all round.
+    float combat_reach_front;
+    float combat_reach_side;  // 0 = sqrt(front * rear)
+    float body_margin;        // how far the body lies outside the reach: Unit::GetCombatReachAtAngle
     uint8 gender;
     uint32 modelid_other_gender;
     float is_trigger;

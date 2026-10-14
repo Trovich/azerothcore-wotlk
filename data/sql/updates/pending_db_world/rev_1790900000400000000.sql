@@ -73,10 +73,10 @@ UPDATE `tmp_kennel` SET `entry` = 60302, `name` = 'Garrick Houndsman', `subname`
 INSERT INTO `creature_template` SELECT * FROM `tmp_kennel`; DROP TEMPORARY TABLE `tmp_kennel`;
 DELETE FROM `creature_template_model` WHERE `CreatureID` IN (60300, 60304, 60305, 60306, 60301, 60302);
 INSERT INTO `creature_template_model` (`CreatureID`, `Idx`, `CreatureDisplayID`, `DisplayScale`, `Probability`, `VerifiedBuild`) VALUES
-(60300, 0, 30210, 1.129, 1, 0),
-(60304, 0, 30211, 1.129, 1, 0),
-(60305, 0, 30212, 1.129, 1, 0),
-(60306, 0, 30213, 1.129, 1, 0),
+(60300, 0, 30210, 1.707, 1, 0),
+(60304, 0, 30211, 1.707, 1, 0),
+(60305, 0, 30212, 1.707, 1, 0),
+(60306, 0, 30213, 1.707, 1, 0),
 (60301, 0, 38601, 1, 1, 0),
 (60301, 1, 38626, 1, 1, 0),
 (60302, 0, 1944, 1, 1, 0);

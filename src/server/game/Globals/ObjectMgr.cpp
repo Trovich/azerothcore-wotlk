@@ -1740,6 +1740,8 @@ void ObjectMgr::LoadCreatureModelInfo()
         modelInfo.bounding_radius      = fields[1].Get<float>();
         modelInfo.combat_reach         = fields[2].Get<float>();
         modelInfo.combat_reach_front   = 0.0f;
+        modelInfo.combat_reach_side    = 0.0f;
+        modelInfo.body_margin          = 0.0f;
         modelInfo.gender               = fields[3].Get<uint8>();
         modelInfo.modelid_other_gender = fields[4].Get<uint32>();
         modelInfo.is_trigger           = false;
@@ -1780,9 +1782,8 @@ void ObjectMgr::LoadCreatureModelInfo()
     } while (result->NextRow());
 
     // Models whose origin is not in the middle of the body (a clefthoof's is at its shoulders, the body
-    // stretches twice as far back as forward): their own reach for what stands in front of them.
-    // See Unit::GetCombatReachToward.
-    if (QueryResult reachResult = WorldDatabase.Query("SELECT DisplayID, CombatReachFront FROM creature_model_reach"))
+    // stretches twice as far back as forward): the reach as an oval. See Unit::GetCombatReachAtAngle.
+    if (QueryResult reachResult = WorldDatabase.Query("SELECT DisplayID, CombatReachFront, CombatReachSide, BodyMargin FROM creature_model_reach"))
     {
         do
         {
@@ -1795,6 +1796,8 @@ void ObjectMgr::LoadCreatureModelInfo()
             }
 
             itr->second.combat_reach_front = fields[1].Get<float>();
+            itr->second.combat_reach_side  = fields[2].Get<float>();
+            itr->second.body_margin        = fields[3].Get<float>();
         } while (reachResult->NextRow());
     }
 

@@ -1342,7 +1342,13 @@ void SmartAI::StartFollowMovement(Unit* target, bool resumed)
     // re-paths only once a creature target has moved 2 * dist away from where it was, so its followers
     // trail a couple of yards behind the leader.
     if (mFollowFormation)
+    {
+        // The formation generator lives in the idle slot: whatever is above it has to go first. After a fight
+        // that is the chase of the dead enemy - left there, the follower stood by the corpse while its leader
+        // walked on (MoveFollow needs no such care, it replaces the active slot itself).
+        me->GetMotionMaster()->Clear(false);
         me->GetMotionMaster()->MoveFormation(target, mFollowDist, mFollowAngle, 0, 0);
+    }
     else if (resumed)
         me->GetMotionMaster()->MoveFollow(target, mFollowDist, mFollowAngle);
     // inheritSpeed true: the follower syncs to whatever the target is actually doing (walk, run, or

@@ -1,0 +1,11 @@
+--
+-- Garadar Wolf Rider (19068): run speed to match the wolf's gallop.
+--
+-- The two patrols ride at a run (waypoint move_type 1) with speed_run 1.14286 = 8 yd/s - the template default,
+-- a man's running pace. Their mount is the riding dire wolf at display scale 1.7 (display 18509; a player's
+-- wolf is the same model at 1.2 and gallops at 11-14 yd/s), so at 8 yd/s the wolf gallops almost on the spot.
+-- 2.28571 = 16 yd/s is what the other mounted wolf patrol of Outland has, the Thrallmar Wolf Rider (16599).
+-- speed_walk 1.48 is left alone. The follower of each pair takes the leader's pace (creature_formations).
+-- Read at startup: restart the worldserver.
+--
+UPDATE `creature_template` SET `speed_run` = 2.28571 WHERE `entry` = 19068;

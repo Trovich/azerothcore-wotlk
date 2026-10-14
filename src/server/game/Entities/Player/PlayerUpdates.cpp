@@ -722,7 +722,38 @@ void Player::UpdateAllRatings()
 // (Unit::SetMinion); it is forgotten on death (Player::setDeathState) and on a manual dismiss
 // (WorldSession::HandleDismissCritter). Once a second: a companion left more than 40 yd behind is brought to
 // its owner, a missing one is summoned again. Nothing happens while dead, in a taxi flight, during a teleport
-// or in an arena - the companion appears right after. Not saved to the DB: a relog needs a new summon.
+// or in an arena - the companion appears right after.
+// The spell is also kept across logout, in the player settings (character_settings, source "companion-pet",
+// value 0; needs EnablePlayerSettings = 1): it is written with every character save and read back at login,
+// so the companion that was out when the player left is there again when he returns.
+static std::string const CompanionPetPSSource = "companion-pet";
+
+void Player::SetCompanionSpell(uint32 spellId)
+{
+    if (m_companionSpell == spellId)
+        return;
+
+    m_companionSpell = spellId;
+
+    // no settings row for a character that never had a companion out
+    if (spellId || m_charSettingsMap.find(CompanionPetPSSource) != m_charSettingsMap.end())
+        UpdatePlayerSetting(CompanionPetPSSource, 0, spellId);
+}
+
+void Player::LoadCompanionSpell()
+{
+    auto itr = m_charSettingsMap.find(CompanionPetPSSource);
+    if (itr == m_charSettingsMap.end() || itr->second.empty())
+        return;
+
+    // a companion the character no longer has (the spell was taken away while he was offline) is forgotten
+    uint32 spellId = itr->second[0].value;
+    if (spellId && !HasSpell(spellId))
+        itr->second[0].value = spellId = 0;
+
+    m_companionSpell = spellId;
+}
+
 void Player::UpdateCompanionPet(uint32 diff)
 {
     static constexpr uint32 CHECK_INTERVAL = 1000;

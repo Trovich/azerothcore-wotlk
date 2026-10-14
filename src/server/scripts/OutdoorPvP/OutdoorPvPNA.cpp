@@ -83,6 +83,11 @@ void OutdoorPvPNA::HandleKillImpl(Player* player, Unit* killed)
         player->KilledMonsterCredit(NA_CREDIT_MARKER);
         player->CastSpell(player, player->GetTeamId() == TEAM_ALLIANCE ? NA_KILL_TOKEN_ALLIANCE : NA_KILL_TOKEN_HORDE, true);
     }
+    // Not blizzlike: the other side's Halaani Guards count for "In Defense of Halaa" / "Enemies, Old and New"
+    // as well. The quests ask for 10 enemy players in Halaa, and on a server of bots there are never that
+    // many at once. Quest credit only - the battle token stays a reward for killing players.
+    else if (killed->GetEntry() == (player->GetTeamId() == TEAM_ALLIANCE ? NA_HALAANI_GUARD_H : NA_HALAANI_GUARD_A))
+        player->KilledMonsterCredit(NA_CREDIT_MARKER);
 }
 
 void UpdateCreatureHalaa(ObjectGuid::LowType spawnId, Map* map, float x, float y)

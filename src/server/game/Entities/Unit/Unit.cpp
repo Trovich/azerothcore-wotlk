@@ -817,17 +817,46 @@ float Unit::GetMeleeRange(Unit const* target) const
 
 float Unit::GetCombatReachToward(Unit const* other) const
 {
+    if (m_combatReachFront <= 0.0f || other == this)
+        return GetCombatReach();
+
+    return GetCombatReachAtAngle(GetRelativeAngle(other));
+}
+
+float Unit::GetCombatReachAtAngle(float relativeAngle) const
+{
     float const rear = GetCombatReach();
-    if (m_combatReachFront <= 0.0f || m_combatReachFront == rear || other == this)
+    if (m_combatReachFront <= 0.0f)
         return rear;
 
-    // The reach is a circle that ends m_combatReachFront ahead of the unit and GetCombatReach() behind it:
-    // its centre lies `shift` behind the unit's position. This is how far it extends towards `other`.
-    // UNIT_FIELD_COMBATREACH (what the client knows) stays the larger, rear value.
-    float const radius = (rear + m_combatReachFront) / 2.0f;
-    float const shift = (rear - m_combatReachFront) / 2.0f;
-    float const cosAngle = std::cos(GetRelativeAngle(other));
-    return -shift * cosAngle + std::sqrt(radius * radius - shift * shift * (1.0f - cosAngle * cosAngle));
+    // The three reaches and the body margin describe the outline of the body as seen from the unit's position:
+    // it ends (front + margin) ahead, (rear + margin) behind and (side + margin) to the left and right, where
+    // rear is GetCombatReach() - what the client knows. Ahead of the unit the outline is half an ellipse (a head
+    // tapers), behind it a rounded box (a rump does not): |x / rear|^4 + |y / side|^4 = 1. The reach at an angle is
+    // the distance to that outline along the angle, less the margin - so an attacker gets as near to the body
+    // from every side as he does from straight behind.
+    float const side = m_combatReachSide > 0.0f ? m_combatReachSide : std::sqrt(m_combatReachFront * rear);
+    float const bodyFront = m_combatReachFront + m_bodyMargin;
+    float const bodyRear = rear + m_bodyMargin;
+    float const bodySide = side + m_bodyMargin;
+
+    float const cosAngle = std::cos(relativeAngle);
+    float const sinAngle = std::sin(relativeAngle);
+    float outline;
+    if (cosAngle >= 0.0f)
+    {
+        float const x = cosAngle / bodyFront;
+        float const y = sinAngle / bodySide;
+        outline = 1.0f / std::sqrt(x * x + y * y);
+    }
+    else
+    {
+        float const x = cosAngle / bodyRear;
+        float const y = sinAngle / bodySide;
+        outline = 1.0f / std::sqrt(std::sqrt(x * x * x * x + y * y * y * y));
+    }
+
+    return std::max(outline - m_bodyMargin, 0.1f);
 }
 
 bool Unit::IsWithinRange(Unit const* obj, float dist) const

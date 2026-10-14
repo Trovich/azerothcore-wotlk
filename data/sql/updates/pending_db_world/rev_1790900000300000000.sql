@@ -268,6 +268,36 @@ INSERT INTO `quest_offer_reward` (`ID`, `Emote1`, `Emote2`, `Emote3`, `Emote4`, 
 (26104, 1, 0, 0, 0, 0, 0, 0, 0, 'Northshire is a quiet place, and that makes it a good one to learn in. Listen to the people here; most of them have a wolf or a kobold that needs dealing with, and every one of those is a lesson.$B$BCome back to me when you have some experience behind you, and I will teach you what I know. Wilson and Adele will keep an eye on you until then - well, Adele will.', 0),
 (26105, 1, 0, 0, 0, 0, 0, 0, 0, 'Death has taken much from us, but not the hunt. If anything it has made us better at it: we do not tire, we do not flinch, and we are very patient.$B$BGo and make yourself useful to Deathknell. When you have learned something of this new existence, return to me and I will teach you more.', 0);
 
+-- "The Hunter's Path": the level 10 pointer from the hunter trainers of the capital to the one who starts the taming
+-- quests (pattern: the dwarves' 6076). Not offered once the taming quest itself is taken or done.
+DELETE FROM `quest_template` WHERE `ID` IN (26107, 26108);
+--   26107: 5515, 5516, 5517 -> 46983
+CREATE TEMPORARY TABLE `tmp_hunter_taming` SELECT * FROM `quest_template` WHERE `ID` = 6076;
+UPDATE `tmp_hunter_taming` SET `ID` = 26107, `AllowableRaces` = 1, `RewardNextQuest` = 26100, `LogDescription` = 'Speak with Benjamin Foxworthy at Goldshire in Elwynn Forest.',
+    `QuestDescription` = 'Well met, $N. You carry yourself like a hunter who is ready for a companion - a beast that will fight at your side and guard your back.$B$BThat first lesson is not ours to teach: your own folk have a man for it. Go to Goldshire and find Benjamin Foxworthy by the smithy. He will put you on the path to a pet of your own.', `VerifiedBuild` = 0;
+INSERT INTO `quest_template` SELECT * FROM `tmp_hunter_taming`; DROP TEMPORARY TABLE `tmp_hunter_taming`;
+--   26108: 39116 -> 39100
+CREATE TEMPORARY TABLE `tmp_hunter_taming` SELECT * FROM `quest_template` WHERE `ID` = 6076;
+UPDATE `tmp_hunter_taming` SET `ID` = 26108, `AllowableRaces` = 16, `RewardNextQuest` = 25076, `LogDescription` = 'Speak with Dedlow Wormwood at Brill in Tirisfal Glades.',
+    `QuestDescription` = 'You have hunted alone long enough, $N. A Forsaken hunter is patient, and patience deserves a servant: a beast bent to your will, that bleeds in your place.$B$BI do not teach the first lessons. Go up to Brill and find Dedlow Wormwood in front of the inn. He will show you how a beast is broken.', `VerifiedBuild` = 0;
+INSERT INTO `quest_template` SELECT * FROM `tmp_hunter_taming`; DROP TEMPORARY TABLE `tmp_hunter_taming`;
+DELETE FROM `quest_template_addon` WHERE `ID` IN (26107, 26108);
+INSERT INTO `quest_template_addon` (`ID`, `MaxLevel`, `AllowableClasses`, `SourceSpellID`, `PrevQuestID`, `NextQuestID`, `ExclusiveGroup`,
+    `BreadcrumbForQuestId`, `RewardMailTemplateID`, `RewardMailDelay`, `RequiredSkillID`, `RequiredSkillPoints`, `RequiredMinRepFaction`,
+    `RequiredMaxRepFaction`, `RequiredMinRepValue`, `RequiredMaxRepValue`, `ProvidedItemCount`, `SpecialFlags`) VALUES
+(26107, 0, 4, 0, 0, 0, 0, 26100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+(26108, 0, 4, 0, 0, 0, 0, 25076, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+DELETE FROM `creature_queststarter` WHERE `quest` IN (26107, 26108);
+INSERT INTO `creature_queststarter` (`id`, `quest`) VALUES (5515, 26107), (5516, 26107), (5517, 26107), (39116, 26108);
+DELETE FROM `creature_questender` WHERE `quest` IN (26107, 26108);
+INSERT INTO `creature_questender` (`id`, `quest`) VALUES (46983, 26107), (39100, 26108);
+DELETE FROM `quest_offer_reward` WHERE `ID` IN (26107, 26108);
+INSERT INTO `quest_offer_reward` (`ID`, `Emote1`, `Emote2`, `Emote3`, `Emote4`, `EmoteDelay1`, `EmoteDelay2`, `EmoteDelay3`, `EmoteDelay4`, `RewardText`, `VerifiedBuild`) VALUES
+(26107, 1, 0, 0, 0, 0, 0, 0, 0, 'Sent from Stormwind, were you? Good. They know there I do not take just anyone.$B$BYes, I believe you are ready. Taming a beast is no small thing - you will earn it.', 0),
+(26108, 1, 0, 0, 0, 0, 0, 0, 0, 'Apolos sends me the ones he thinks will last. We shall see.$B$BYes... you are ready to learn what it is to command a beast. Listen well.', 0);
+-- the givers and enders must show quest marks: Apolos and Dedlow were trainers only
+UPDATE `creature_template` SET `npcflag` = `npcflag` | 2 WHERE `entry` IN (5515, 5516, 5517, 39100, 39116, 46983);
+
 -- The darkhounds of Tirisfal Glades (1547, 1548, 1549) stay the demons they are, but get a pet family - Hyena (its
 -- ability, Tendon Rip, is what the Tirisfal rare darkhound Bayne uses) - and the tameable flag: by the core rule
 -- of gargoyle-pet, demons and undead so marked are tamed by Forsaken hunters only. (An earlier version of this
