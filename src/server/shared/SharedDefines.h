@@ -3212,6 +3212,8 @@ enum SkillType
     SKILL_PET_WIND_SERPENT         = 656,
     SKILL_LANG_GUTTERSPEAK         = 673,
     SKILL_RIDING_KODO              = 713,
+    SKILL_RIDING_ELEKK             = 714,   // custom: racial riding of the draenei (SkillLine.dbc row in patch-Z)
+    SKILL_RIDING_HAWKSTRIDER       = 715,   // custom: racial riding of the blood elves
     SKILL_RACIAL_TROLL             = 733,
     SKILL_RACIAL_GNOME             = 753,
     SKILL_RACIAL_HUMAN             = 754,

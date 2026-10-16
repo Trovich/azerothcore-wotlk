@@ -7,7 +7,7 @@
 --
 
 DELETE FROM `spell_dbc` WHERE `ID` = 130770;
-INSERT INTO `spell_dbc` VALUES (130770, 1133, 1, 0, 16, 98304, 0, 262144, 0, 0, 8388608, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 101, 0, 0, 18, 18, 1, 3, 0, 0, 0, 0, 1, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 6, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 22, 0, 0, 15, 0, 0, 18, 0, 0, 4, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4041, 0, 146, 0, 0, 'Alarm Bark', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 'A bark that gives away every hidden enemy within 15 yards: they are thrown out of stealth and cannot stealth or turn invisible for $d.', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 'Cannot stealth or turn invisible.', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 0, 133, 1000, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1.0, 1.0, 1.0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 1.0, 1.0, 1.0, 0, 0);
+INSERT INTO `spell_dbc` VALUES (130770, 1133, 1, 0, 16, 98304, 0, 262144, 0, 0, 8388608, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 101, 0, 0, 18, 18, 1, 3, 0, 0, 0, 0, 1, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 6, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 22, 0, 0, 15, 0, 0, 18, 0, 0, 4, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16700, 0, 146, 0, 0, 'Alarm Bark', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 'A bark that gives away every hidden enemy within 15 yards: they are thrown out of stealth and cannot stealth or turn invisible for $d.', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 'Cannot stealth or turn invisible.', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 16712190, 0, 133, 1000, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1.0, 1.0, 1.0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 1.0, 1.0, 1.0, 0, 0);
 
 -- The dog: Officer Jaxon under a new id (level, elite rank, guard faction and flags), then what differs
 DELETE FROM `creature_template` WHERE `entry` = 60303;
@@ -30,10 +30,8 @@ INSERT INTO `smart_scripts` (`entryorguid`, `source_type`, `id`, `link`, `event_
     `event_param1`, `event_param2`, `event_param3`, `event_param4`, `event_param5`, `event_param6`, `action_type`, `action_param1`, `action_param2`,
     `action_param3`, `action_param4`, `action_param5`, `action_param6`, `target_type`, `target_param1`, `target_param2`, `target_param3`, `target_param4`,
     `target_x`, `target_y`, `target_z`, `target_o`, `comment`) VALUES
-(60303, 0, 0, 1, 4, 0, 100, 0, 0, 0, 0, 0, 0, 0, 11, 130770, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - On Aggro - Cast ''Alarm Bark'''),
-(60303, 0, 1, 0, 61, 0, 100, 0, 0, 0, 0, 0, 0, 0, 4, 16419, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - On Aggro - Play Bark Sound'),
-(60303, 0, 2, 3, 0, 0, 100, 0, 12000, 15000, 12000, 15000, 0, 0, 11, 130770, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - In Combat - Cast ''Alarm Bark'''),
-(60303, 0, 3, 0, 61, 0, 100, 0, 0, 0, 0, 0, 0, 0, 4, 16419, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - In Combat - Play Bark Sound'),
+(60303, 0, 0, 0, 4, 0, 100, 0, 0, 0, 0, 0, 0, 0, 11, 130770, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - On Aggro - Cast ''Alarm Bark'''),
+(60303, 0, 2, 0, 0, 0, 100, 0, 12000, 15000, 12000, 15000, 0, 0, 11, 130770, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - In Combat - Cast ''Alarm Bark'''),
 (60303, 0, 4, 0, 9, 0, 100, 0, 500, 1000, 10000, 14000, 8, 25, 11, 22911, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - Within 8-25 Range - Cast ''Charge'''),
 (60303, 0, 5, 0, 0, 0, 100, 0, 3000, 5000, 7000, 10000, 0, 0, 11, 30639, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 'Stormwind Mastiff - In Combat - Cast ''Carnivorous Bite''');
 

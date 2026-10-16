@@ -1475,7 +1475,7 @@ void SpellMgr::LoadSpellLearnSkills()
                 case SPELL_EFFECT_SKILL:
                     dbc_node.skill = entry->Effects[i].MiscValue;
                     dbc_node.step  = entry->Effects[i].CalcValue();
-                    if (dbc_node.skill != SKILL_RIDING)
+                    if (!IsRidingSkill(dbc_node.skill))
                     {
                         dbc_node.value = 1;
                     }

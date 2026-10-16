@@ -629,9 +629,32 @@ inline bool IsProfessionSkill(uint32 skill)
     return  IsPrimaryProfessionSkill(skill) || skill == SKILL_FISHING || skill == SKILL_COOKING || skill == SKILL_FIRST_AID;
 }
 
+// Riding plus the racial riding skills (Horse Riding ... Hawkstrider Riding): each racial mount vendor's
+// mounts need their own skill, taught by the riding trainer next to the vendor
+inline bool IsRidingSkill(uint32 skill)
+{
+    switch (skill)
+    {
+        case SKILL_RIDING:
+        case SKILL_RIDING_HORSE:
+        case SKILL_RIDING_WOLF:
+        case SKILL_RIDING_TIGER:
+        case SKILL_RIDING_RAM:
+        case SKILL_RIDING_RAPTOR:
+        case SKILL_RIDING_MECHANOSTRIDER:
+        case SKILL_RIDING_UNDEAD_HORSE:
+        case SKILL_RIDING_KODO:
+        case SKILL_RIDING_ELEKK:
+        case SKILL_RIDING_HAWKSTRIDER:
+            return true;
+        default:
+            return false;
+    }
+}
+
 inline bool IsProfessionOrRidingSkill(uint32 skill)
 {
-    return  IsProfessionSkill(skill) || skill == SKILL_RIDING;
+    return  IsProfessionSkill(skill) || IsRidingSkill(skill);
 }
 
 bool IsPartOfSkillLine(uint32 skillId, uint32 spellId);

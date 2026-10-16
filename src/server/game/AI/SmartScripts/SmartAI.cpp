@@ -972,6 +972,12 @@ void SmartAI::AttackStart(Unit* who)
 
     if (who && me->Attack(who, mCanAutoAttack && !_currentRangeMode))
     {
+        // A caster in range mode does not swing, and its spells come from "on aggro" / "in combat" events: told to
+        // attack by a script (SMART_ACTION_ATTACK_START) rather than pulled, it never got into combat and stood there
+        // facing its target with its weapon raised - Hemet Nesingwary and the Talbuk Stag of his camp in Nagrand.
+        if (_currentRangeMode && !me->IsEngagedBy(who))
+            me->EngageWithTarget(who);
+
         if (!me->HasUnitState(UNIT_STATE_NO_COMBAT_MOVEMENT))
         {
             MovementGeneratorType type = me->GetMotionMaster()->GetMotionSlotType(MOTION_SLOT_ACTIVE);

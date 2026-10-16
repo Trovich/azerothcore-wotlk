@@ -936,9 +936,17 @@ class go_jump_a_tron : public GameObjectScript
 public:
     go_jump_a_tron() : GameObjectScript("go_jump_a_tron") { }
 
-    bool OnGossipHello(Player* player, GameObject* /*go*/) override
+    bool OnGossipHello(Player* player, GameObject* go) override
     {
-        if (player->GetQuestStatus(10111) == QUEST_STATUS_INCOMPLETE)
+        if (player->GetQuestStatus(10111) != QUEST_STATUS_INCOMPLETE)
+            return true;
+
+        // The machine's invisible helper (19041, standing in it) fires the launch: the knockback throws the
+        // player away from it, so where he stands next to the machine is where he aims (cMaNGOS go_jump_a_tron).
+        // Cast by the player on himself the throw had no direction to go by and took a random one.
+        if (Creature* launcher = go->FindNearestCreature(19041, INTERACTION_DISTANCE))
+            launcher->CastSpell(player, 33382, true);
+        else
             player->CastSpell(player, 33382, true);
 
         return true;

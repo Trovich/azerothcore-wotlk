@@ -11066,6 +11066,16 @@ void Unit::UpdateSpeed(UnitMoveType mtype, bool forced)
             }
             break;
         }
+        case MOVE_WALK:
+        {
+            // A creature walks at its own rate too (creature_template.speed_walk, set once in Creature::InitEntry).
+            // Without this every recalculation - a slow put on it or taken off, its health under 30% - left the walk
+            // at the stock 1.0 for good: Gutripper in Nagrand went on along its path at 2.5 yd/s instead of 6 after a fight.
+            if (Creature* walker = ToCreature())
+                if (!(IsPet() && ToPet()->isControlled() && IsControlledByPlayer()))
+                    speed *= walker->GetCreatureTemplate()->speed_walk;
+            break;
+        }
         default:
             break;
     }
