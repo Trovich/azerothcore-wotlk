@@ -455,6 +455,7 @@ public:
         {
             SpawnAssoc = nullptr;
             SpawnedGUID.Clear();
+            SpawnedFactionTemplate = nullptr;
 
             // find the correct spawnhandling
             static uint32 entryCount = sizeof(spawnAssociations) / sizeof(SpawnAssociation);
@@ -480,11 +481,16 @@ public:
                     SpawnAssoc = nullptr;
                     return;
                 }
+
+                // guard posts and trip wires are of the neutral Ambient faction, so the reaction
+                // towards players is judged by the faction of the guard they summon
+                SpawnedFactionTemplate = sFactionTemplateStore.LookupEntry(spawnedTemplate->faction);
             }
         }
 
         SpawnAssociation* SpawnAssoc;
         ObjectGuid SpawnedGUID;
+        FactionTemplateEntry const* SpawnedFactionTemplate;
 
         void Reset() override
         {
@@ -554,9 +560,7 @@ public:
             // well, so the old me->IsValidAttackTarget(who) test could never pass for either of them -
             // only the alarm bots ever raised the alarm. Whether someone is trespassing is decided by the
             // faction of the guard the post calls in, reputation included (Aldor/Scryer, Sporeggar, ...).
-            CreatureTemplate const* guardTemplate = sObjectMgr->GetCreatureTemplate(SpawnAssoc->spawnedCreatureEntry);
-            FactionTemplateEntry const* guardFaction = sFactionTemplateStore.LookupEntry(guardTemplate->faction);
-            if (me->GetFactionReactionTo(guardFaction, player) > REP_HOSTILE)
+            if (SpawnedFactionTemplate && me->GetFactionReactionTo(SpawnedFactionTemplate, player) > REP_HOSTILE)
                 return false;
 
             // trip wires only catch intruders who have landed

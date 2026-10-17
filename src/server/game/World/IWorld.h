@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "Duration.h"
 #include "ObjectGuid.h"
-#include "QueryHolder.h"
+#include "Optional.h"
 #include "SharedDefines.h"
 #include "WorldConfig.h"
 #include <unordered_map>
@@ -60,6 +60,24 @@ enum ServerMessageType
     SERVER_MSG_RESTART_CANCELLED  = 5
 };
 
+// Stored in `uptime`.`ShutdownType`
+enum SessionShutdownType : uint8
+{
+    SHUTDOWN_TYPE_UNKNOWN  = 0,
+    SHUTDOWN_TYPE_SHUTDOWN = 1,
+    SHUTDOWN_TYPE_RESTART  = 2,
+    SHUTDOWN_TYPE_ERROR    = 3,
+};
+
+struct PreviousSessionInfo
+{
+    Seconds StartTime = 0s;
+    Seconds Uptime = 0s;
+    bool Crashed = false;
+    SessionShutdownType Type = SHUTDOWN_TYPE_UNKNOWN;
+    std::string Reason;
+};
+
 class IWorld
 {
 public:
@@ -84,6 +102,9 @@ public:
     virtual void ShutdownServ(uint32 time, uint32 options, uint8 exitcode, std::string const& reason = std::string()) = 0;
     virtual void ShutdownCancel() = 0;
     virtual void ShutdownMsg(bool show = false, Player* player = nullptr, std::string const& reason = std::string()) = 0;
+    virtual void SaveSessionEnd(bool finished) = 0;
+    [[nodiscard]] virtual Optional<PreviousSessionInfo> const& GetPreviousSessionInfo() const = 0;
+    [[nodiscard]] virtual uint32 GetLifetimeMaxPlayerCount() const = 0;
     virtual void Update(uint32 diff) = 0;
     virtual void setRate(ServerConfigs index, float value) = 0;
     [[nodiscard]] virtual float getRate(ServerConfigs index) const = 0;
@@ -111,7 +132,6 @@ public:
     virtual void   ResetEventSeasonalQuests(uint16 event_id) = 0;
     [[nodiscard]] virtual std::string const& GetRealmName() const = 0;
     virtual void SetRealmName(std::string name) = 0;
-    virtual SQLQueryHolderCallback& AddQueryHolderCallback(SQLQueryHolderCallback&& callback) = 0;
     virtual void ReloadRBAC() = 0;
 };
 
