@@ -29,16 +29,16 @@ INSERT INTO `skillline_dbc` VALUES (714, 9, 0, 'Elekk Riding', '', '', '', 'Elek
 
 -- Every racial riding skill is valid for every race / class (otherwise _LoadSkills deletes it)
 DELETE FROM `skillraceclassinfo_dbc` WHERE `ID` IN (990, 991, 992, 993, 994, 995, 996, 997, 998, 999);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (990, 148, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (991, 152, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (992, 150, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (993, 553, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (994, 149, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (995, 533, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (996, 554, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (997, 713, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (998, 715, 2047, 1535, 1170, 0, 181, 0);
-INSERT INTO `skillraceclassinfo_dbc` VALUES (999, 714, 2047, 1535, 1170, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (990, 148, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (991, 152, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (992, 150, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (993, 553, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (994, 149, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (995, 533, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (996, 554, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (997, 713, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (998, 715, 2047, 1535, 144, 0, 181, 0);
+INSERT INTO `skillraceclassinfo_dbc` VALUES (999, 714, 2047, 1535, 144, 0, 181, 0);
 
 DELETE FROM `skilllineability_dbc` WHERE `ID` IN (22171, 22170);
 INSERT INTO `skilllineability_dbc` VALUES (22171, 715, 130743, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0);
